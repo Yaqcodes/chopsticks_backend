@@ -21,13 +21,28 @@ USE_TZ = True
 # Base URL for frontend
 BASE_URL = config('BASE_URL', default='http://localhost:5173')
 
+# Production frontend URLs
+PRODUCTION_FRONTEND_URLS = [
+    'https://chopsticks-frontend.vercel.app',
+    'https://chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app',
+    'https://chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app',
+    'https://chopsticksandbowls.com',
+    'https://www.chopsticksandbowls.com',
+]
+
+# Environment Variables for Production (set these on PythonAnywhere):
+# DEBUG=False
+# ALLOWED_HOSTS=your-pythonanywhere-domain.com,chopsticks-frontend.vercel.app,chopsticksandbowls.com
+# CORS_ALLOWED_ORIGINS=https://chopsticks-frontend.vercel.app,https://chopsticksandbowls.com
+# SECRET_KEY=your-production-secret-key
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-here')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,chopsticks-frontend.vercel.app,chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app,chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app,chopsticksandbowls.com,www.chopsticksandbowls.com,chopsticksandb0wls.pythonanywhere.com', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # Application definition
 INSTALLED_APPS = [
@@ -145,8 +160,40 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173,http://127.0.0.1:5173', cast=lambda v: [s.strip() for s in v.split(',')])
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173,http://127.0.0.1:5173,https://chopsticks-frontend.vercel.app,https://chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app,https://chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app,https://chopsticksandbowls.com,https://www.chopsticksandbowls.com', cast=lambda v: [s.strip() for s in v.split(',')])
+
+# Additional CORS settings for production
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = False  # Keep this False for security
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# Security settings for production
+if not DEBUG:
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    # Note: Don't set SECURE_SSL_REDIRECT = True on PythonAnywhere unless you have SSL configured
 
 # REST Framework settings
 REST_FRAMEWORK = {
