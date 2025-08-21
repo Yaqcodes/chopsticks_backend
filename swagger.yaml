@@ -1,0 +1,6604 @@
+swagger: '2.0'
+info:
+  title: Chopsticks & Bowls API
+  description: |
+    Complete API documentation for Chopsticks & Bowls restaurant backend.
+    
+    ## Features
+    - User authentication and profile management
+    - Menu management and search
+    - Order processing and tracking
+    - Loyalty program with QR codes
+    - Payment integration with Paystack
+    - Address management
+    - Promotional codes
+    - Restaurant settings and configuration
+    
+    ## Authentication
+    Most endpoints require JWT authentication. Include the token in the Authorization header:
+    ```
+    Authorization: Bearer <your_jwt_token>
+    ```
+    
+    ## Rate Limiting
+    - Authenticated users: 100 requests per minute
+    - Unauthenticated users: 10 requests per minute
+    
+    ## Pagination
+    List endpoints support pagination with query parameters:
+    - `page`: Page number (default: 1)
+    - `page_size`: Items per page (default: 20, max: 100)
+  termsOfService: https://www.chopsticksandbowls.com/terms/
+  contact:
+    email: api@chopsticksandbowls.com
+    name: API Support Team
+  license:
+    name: Proprietary License
+    url: https://www.chopsticksandbowls.com/license/
+  version: v1.2.0
+host: 127.0.0.1:8000
+schemes:
+- http
+- https
+basePath: /api
+consumes:
+- application/json
+produces:
+- application/json
+securityDefinitions:
+  Bearer:
+    type: apiKey
+    name: Authorization
+    in: header
+    description: JWT token in format "Bearer <token>"
+  Basic:
+    type: basic
+    description: Basic authentication for admin endpoints
+security:
+- Bearer: []
+- Basic: []
+tags:
+- name: Authentication
+  description: User authentication and profile management
+- name: Addresses
+  description: User address management and geocoding
+- name: Loyalty
+  description: Loyalty program, points, and rewards
+- name: Menu
+  description: Menu categories, items, and search
+- name: Orders
+  description: Order creation, management, and tracking
+- name: Payments
+  description: Payment processing and verification
+- name: Promotions
+  description: Promotional codes and discounts
+- name: Core
+  description: Core system endpoints including restaurant settings and health checks
+paths:
+  /core/restaurant-settings/:
+    get:
+      operationId: core_restaurant_settings_read
+      summary: Get Restaurant Settings
+      description: |
+        Retrieve comprehensive restaurant settings and configuration information.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+        
+        This endpoint provides all public restaurant information including:
+        - Basic restaurant details (name, description, tagline)
+        - Contact information (phone, email, address, website)
+        - Operating hours and availability
+        - Social media links
+        - Delivery settings and fees
+        - Payment method preferences
+        - Branding assets (logo, favicon)
+      parameters: []
+      responses:
+        '200':
+          description: Restaurant settings retrieved successfully
+          schema:
+            $ref: '#/definitions/RestaurantSettings'
+          example:
+            name: "Chopsticks and Bowls"
+            description: "Authentic Korean Cuisine in Abuja"
+            tagline: "Authentic Korean Cuisine in Abuja"
+            address: "Abuja, Nigeria"
+            phone: "+234"
+            email: "info@chopsticksandbowls.com"
+            website: "https://chopsticksandbowls.com"
+            opening_hours: {}
+            opening_time: "11:00:00"
+            closing_time: "22:00:00"
+            is_open: true
+            facebook_url: "https://facebook.com/chopsticksandbowls"
+            instagram_url: "https://instagram.com/chop.sticksandbowls"
+            twitter_url: ""
+            logo: "http://127.0.0.1:8000/media/restaurant/logo.png"
+            favicon: "http://127.0.0.1:8000/media/restaurant/favicon.png"
+            delivery_radius: "10.00"
+            minimum_order: "0.00"
+            free_delivery_threshold: "50.00"
+            vat_rate: "0.075"
+            pickup_delivery_fee: "0.00"
+            delivery_fee_base: "5.00"
+            delivery_fee_per_km: "1.00"
+            accepts_cash: true
+            accepts_card: true
+            accepts_mobile_money: true
+        '500':
+          description: Internal server error
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Failed to retrieve restaurant settings"
+              details:
+                type: string
+                example: "Database connection error"
+      tags:
+      - Core
+    parameters: []
+  /core/info/:
+    get:
+      operationId: core_info_read
+      summary: Get Public Restaurant Information
+      description: |
+        Retrieve public restaurant information using the PublicRestaurantSettingsSerializer.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+        
+        This endpoint provides filtered restaurant information suitable for public display,
+        excluding sensitive system settings.
+      parameters: []
+      responses:
+        '200':
+          description: Public restaurant information retrieved successfully
+          schema:
+            $ref: '#/definitions/PublicRestaurantSettings'
+        '500':
+          description: Internal server error
+      tags:
+      - Core
+    parameters: []
+  /core/health/:
+    get:
+      operationId: core_health_read
+      summary: Health Check
+      description: |
+        Check the health status of the API.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+        
+        Useful for monitoring and load balancer health checks.
+      parameters: []
+      responses:
+        '200':
+          description: API is healthy
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                example: "healthy"
+              message:
+                type: string
+                example: "Chopsticks and Bowls API is running"
+      tags:
+      - Core
+    parameters: []
+  /core/status/:
+    get:
+      operationId: core_status_read
+      summary: System Status
+      description: |
+        Get system status and maintenance information.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+        
+        Provides information about system maintenance mode, operating hours,
+        and current system status.
+      parameters: []
+      responses:
+        '200':
+          description: System status retrieved successfully
+          schema:
+            type: object
+            properties:
+              maintenance_mode:
+                type: boolean
+                description: Whether the system is in maintenance mode
+                example: false
+              maintenance_message:
+                type: string
+                description: Maintenance message if in maintenance mode
+                example: ""
+              is_open:
+                type: boolean
+                description: Whether the restaurant is currently open
+                example: true
+              opening_time:
+                type: string
+                format: time
+                description: Restaurant opening time
+                example: "11:00:00"
+              closing_time:
+                type: string
+                format: time
+                description: Restaurant closing time
+                example: "22:00:00"
+        '500':
+          description: Internal server error
+      tags:
+      - Core
+    parameters: []
+  /addresses/:
+    get:
+      operationId: addresses_list
+      summary: List User Addresses
+      description: |
+        Retrieve a paginated list of user's saved addresses.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: search
+        in: query
+        description: Search addresses by name, city, or address text
+        required: false
+        type: string
+        example: "Abuja"
+      - name: ordering
+        in: query
+        description: Order results by field (e.g., 'created_at', '-created_at' for descending)
+        required: false
+        type: string
+        enum: [created_at, -created_at, city, -city, is_default, -is_default]
+        example: "-created_at"
+      - name: page
+        in: query
+        description: Page number for pagination (default: 1)
+        required: false
+        type: integer
+        minimum: 1
+        example: 1
+      - name: page_size
+        in: query
+        description: Number of items per page (default: 20, max: 100)
+        required: false
+        type: integer
+        minimum: 1
+        maximum: 100
+        example: 20
+      responses:
+        '200':
+          description: List of addresses retrieved successfully
+          schema:
+            required:
+            - count
+            - results
+            type: object
+            properties:
+              count:
+                type: integer
+                description: Total number of addresses
+                example: 3
+              next:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for next page (null if no next page)
+                example: "http://127.0.0.1:8000/api/addresses/?page=2"
+              previous:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for previous page (null if no previous page)
+                example: null
+              results:
+                type: array
+                description: List of addresses
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      description: Address ID
+                    full_name:
+                      type: string
+                      description: Full name for delivery
+                    phone:
+                      type: string
+                      description: Contact phone number
+                    address:
+                      type: string
+                      description: Street address
+                    city:
+                      type: string
+                      description: City name
+                    state:
+                      type: string
+                      description: State/province
+                    postal_code:
+                      type: string
+                      description: Postal/ZIP code
+                    country:
+                      type: string
+                      description: Country name
+                    latitude:
+                      type: string
+                      format: decimal
+                      description: Latitude coordinate
+                    longitude:
+                      type: string
+                      format: decimal
+                      description: Longitude coordinate
+                    is_default:
+                      type: boolean
+                      description: Whether this is the default address
+                    address_type:
+                      type: string
+                      enum: [home, work, other]
+                      description: Type of address
+                    full_address:
+                      type: string
+                      description: Complete formatted address
+                    coordinates:
+                      type: string
+                      description: Formatted coordinates
+                    created_at:
+                      type: string
+                      format: date-time
+                      description: When address was created
+                    updated_at:
+                      type: string
+                      format: date-time
+                      description: When address was last updated
+        '401':
+          description: Authentication required
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Authentication credentials were not provided."
+        '403':
+          description: Access forbidden
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "You do not have permission to perform this action."
+        '429':
+          description: Rate limit exceeded
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Request limit exceeded. Try again in 60 seconds."
+      tags:
+      - Addresses
+    post:
+      operationId: addresses_create
+      summary: Create New Address
+      description: |
+        Create a new address for the authenticated user.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Address data
+        schema:
+          type: object
+          required:
+          - full_name
+          - phone
+          - address
+          - city
+          - state
+          - postal_code
+          properties:
+            full_name:
+              type: string
+              description: Full name for delivery
+              maxLength: 200
+              minLength: 1
+            phone:
+              type: string
+              description: Contact phone number
+              maxLength: 15
+              minLength: 1
+            address:
+              type: string
+              description: Street address
+              minLength: 1
+            city:
+              type: string
+              description: City name
+              maxLength: 100
+              minLength: 1
+            state:
+              type: string
+              description: State/province
+              maxLength: 100
+              minLength: 1
+            postal_code:
+              type: string
+              description: Postal/ZIP code (optional)
+              maxLength: 20
+            country:
+              type: string
+              description: Country name
+              maxLength: 100
+              minLength: 1
+            latitude:
+              type: string
+              format: decimal
+              description: Latitude coordinate
+            longitude:
+              type: string
+              format: decimal
+              description: Longitude coordinate
+            is_default:
+              type: boolean
+              description: Whether this is the default address
+            address_type:
+              type: string
+              enum: [home, work, other]
+              description: Type of address
+        example:
+          full_name: "John Doe"
+          phone: "+2348012345678"
+          address: "123 Main Street, Wuse Zone 2"
+          city: "Abuja"
+          state: "FCT"
+          postal_code: "900001"
+          country: "Nigeria"
+          address_type: "home"
+          is_default: true
+      responses:
+        '201':
+          description: Address created successfully
+          schema:
+            type: object
+            properties:
+              id:
+                type: integer
+                description: Address ID
+              full_name:
+                type: string
+                description: Full name for delivery
+              phone:
+                type: string
+                description: Contact phone number
+              address:
+                type: string
+                description: Street address
+              city:
+                type: string
+                description: City name
+              state:
+                type: string
+                description: State/province
+              postal_code:
+                type: string
+                description: Postal/ZIP code
+              country:
+                type: string
+                description: Country name
+              latitude:
+                type: string
+                format: decimal
+                description: Latitude coordinate
+              longitude:
+                type: string
+                format: decimal
+                description: Longitude coordinate
+              is_default:
+                type: boolean
+                description: Whether this is the default address
+              address_type:
+                type: string
+                enum: [home, work, other]
+                description: Type of address
+              full_address:
+                type: string
+                description: Complete formatted address
+              coordinates:
+                type: string
+                description: Formatted coordinates
+              created_at:
+                type: string
+                format: date-time
+                description: When address was created
+              updated_at:
+                type: string
+                format: date-time
+                description: When address was last updated
+        '400':
+          description: Bad request - validation errors
+          schema:
+            type: object
+            properties:
+              full_name:
+                type: array
+                items:
+                  type: string
+                example: ["This field is required."]
+              phone:
+                type: array
+                items:
+                  type: string
+                example: ["Enter a valid phone number."]
+        '401':
+          description: Authentication required
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Addresses
+    parameters: []
+  /addresses/default/:
+    get:
+      operationId: addresses_default_list
+      summary: Get Default Address
+      description: |
+        Retrieve the user's default address.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters: []
+      responses:
+        '200':
+          description: Default address retrieved successfully
+          schema:
+            type: object
+            properties:
+              id:
+                type: integer
+                description: Address ID
+              full_name:
+                type: string
+                description: Full name for delivery
+              phone:
+                type: string
+                description: Contact phone number
+              address:
+                type: string
+                description: Street address
+              city:
+                type: string
+                description: City name
+              state:
+                type: string
+                description: State/province
+              postal_code:
+                type: string
+                description: Postal/ZIP code
+              country:
+                type: string
+                description: Country name
+              latitude:
+                type: string
+                format: decimal
+                description: Latitude coordinate
+              longitude:
+                type: string
+                format: decimal
+                description: Longitude coordinate
+              is_default:
+                type: boolean
+                description: Whether this is the default address
+              address_type:
+                type: string
+                enum: [home, work, other]
+                description: Type of address
+              full_address:
+                type: string
+                description: Complete formatted address
+              coordinates:
+                type: string
+                description: Formatted coordinates
+              created_at:
+                type: string
+                format: date-time
+                description: When address was created
+              updated_at:
+                type: string
+                format: date-time
+                description: When address was last updated
+        '401':
+          description: Authentication required
+        '404':
+          description: No default address found
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "No default address found for this user."
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Addresses
+    parameters: []
+  /addresses/geocode/:
+    post:
+      operationId: addresses_geocode_create
+      summary: Geocode Address
+      description: |
+        Geocode an address using Google Maps API to get coordinates.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Address to geocode
+        schema:
+          type: object
+          required:
+          - address
+          properties:
+            address:
+              type: string
+              description: Full address to geocode
+              example: "123 Main Street, Wuse Zone 2, Abuja, FCT, Nigeria"
+        example:
+          address: "123 Main Street, Wuse Zone 2, Abuja, FCT, Nigeria"
+      responses:
+        '201':
+          description: Address geocoded successfully
+          schema:
+            type: object
+            properties:
+              address:
+                type: string
+                example: "123 Main Street, Wuse Zone 2, Abuja, FCT, Nigeria"
+              latitude:
+                type: string
+                format: decimal
+                example: "9.0820"
+              longitude:
+                type: string
+                format: decimal
+                example: "7.3986"
+              formatted_address:
+                type: string
+                example: "123 Main St, Wuse Zone 2, Abuja, Federal Capital Territory, Nigeria"
+        '400':
+          description: Bad request - invalid address
+          schema:
+            type: object
+            properties:
+              address:
+                type: array
+                items:
+                  type: string
+                example: ["Address is required."]
+        '401':
+          description: Authentication required
+        '429':
+          description: Rate limit exceeded
+        '500':
+          description: Geocoding service error
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Geocoding service temporarily unavailable."
+      tags:
+      - Addresses
+    parameters: []
+  /addresses/{address_id}/set-default/:
+    post:
+      operationId: addresses_set-default_create
+      summary: Set Address as Default
+      description: |
+        Set a specific address as the user's default address.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: address_id
+        in: path
+        required: true
+        description: ID of the address to set as default
+        type: integer
+        example: 1
+      responses:
+        '201':
+          description: Address set as default successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Address set as default successfully."
+              address:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    description: Address ID
+                  full_name:
+                    type: string
+                    description: Full name for delivery
+                  phone:
+                    type: string
+                    description: Contact phone number
+                  address:
+                    type: string
+                    description: Street address
+                  city:
+                    type: string
+                    description: City name
+                  state:
+                    type: string
+                    description: State/province
+                  postal_code:
+                    type: string
+                    description: Postal/ZIP code
+                  country:
+                    type: string
+                    description: Country name
+                  latitude:
+                    type: string
+                    format: decimal
+                    description: Latitude coordinate
+                  longitude:
+                    type: string
+                    format: decimal
+                    description: Longitude coordinate
+                  is_default:
+                    type: boolean
+                    description: Whether this is the default address
+                  address_type:
+                    type: string
+                    enum: [home, work, other]
+                    description: Type of address
+                  full_address:
+                    type: string
+                    description: Complete formatted address
+                  coordinates:
+                    type: string
+                    description: Formatted coordinates
+                  created_at:
+                    type: string
+                    format: date-time
+                    description: When address was created
+                  updated_at:
+                    type: string
+                    format: date-time
+                    description: When address was last updated
+        '400':
+          description: Bad request
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Cannot set address as default."
+        '401':
+          description: Authentication required
+        '404':
+          description: Address not found
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Address not found."
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Addresses
+    parameters:
+    - name: address_id
+      in: path
+      required: true
+      type: integer
+      description: ID of the address to set as default
+      example: 1
+  /addresses/{id}/:
+    get:
+      operationId: addresses_read
+      summary: Get Address Details
+      description: |
+        Retrieve detailed information about a specific address.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters: []
+      responses:
+        '200':
+          description: Address details retrieved successfully
+          schema:
+            type: object
+            properties:
+              id:
+                type: integer
+                description: Address ID
+              full_name:
+                type: string
+                description: Full name for delivery
+              phone:
+                type: string
+                description: Contact phone number
+              address:
+                type: string
+                description: Street address
+              city:
+                type: string
+                description: City name
+              state:
+                type: string
+                description: State/province
+              postal_code:
+                type: string
+                description: Postal/ZIP code
+              country:
+                type: string
+                description: Country name
+              latitude:
+                type: string
+                format: decimal
+                description: Latitude coordinate
+              longitude:
+                type: string
+                format: decimal
+                description: Longitude coordinate
+              is_default:
+                type: boolean
+                description: Whether this is the default address
+              address_type:
+                type: string
+                enum: [home, work, other]
+                description: Type of address
+              full_address:
+                type: string
+                description: Complete formatted address
+              coordinates:
+                type: string
+                description: Formatted coordinates
+              created_at:
+                type: string
+                format: date-time
+                description: When address was created
+              updated_at:
+                type: string
+                format: date-time
+                description: When address was last updated
+        '401':
+          description: Authentication required
+        '404':
+          description: Address not found
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Address not found."
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Addresses
+    put:
+      operationId: addresses_update
+      summary: Update Address (Full)
+      description: |
+        Update an address with complete data (all fields required).
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Complete address data
+        schema:
+          $ref: '#/definitions/AddressUpdate'
+        example:
+          full_name: "John Doe"
+          phone: "+2348012345678"
+          address: "123 Main Street, Wuse Zone 2"
+          city: "Abuja"
+          state: "FCT"
+          postal_code: "900001"
+          country: "Nigeria"
+          address_type: "home"
+          is_default: false
+      responses:
+        '200':
+          description: Address updated successfully
+          schema:
+            $ref: '#/definitions/AddressUpdate'
+        '400':
+          description: Bad request - validation errors
+        '401':
+          description: Authentication required
+        '403':
+          description: Access forbidden - not your address
+        '404':
+          description: Address not found
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Addresses
+    patch:
+      operationId: addresses_partial_update
+      summary: Update Address (Partial)
+      description: |
+        Update specific fields of an address.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Partial address data
+        schema:
+          $ref: '#/definitions/AddressUpdate'
+        example:
+          phone: "+2348098765432"
+          address_type: "work"
+      responses:
+        '200':
+          description: Address updated successfully
+          schema:
+            $ref: '#/definitions/AddressUpdate'
+        '400':
+          description: Bad request - validation errors
+        '401':
+          description: Authentication required
+        '403':
+          description: Access forbidden - not your address
+        '404':
+          description: Address not found
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Addresses
+    delete:
+      operationId: addresses_delete
+      summary: Delete Address
+      description: |
+        Delete a specific address.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+        
+        **Note**: Cannot delete the default address. Set another address as default first.
+      parameters: []
+      responses:
+        '204':
+          description: Address deleted successfully
+        '400':
+          description: Bad request - cannot delete default address
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Cannot delete default address. Set another address as default first."
+        '401':
+          description: Authentication required
+        '403':
+          description: Access forbidden - not your address
+        '404':
+          description: Address not found
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Addresses
+    parameters:
+    - name: id
+      in: path
+      required: true
+      type: integer
+      description: A unique integer value identifying this address
+      example: 1
+  /auth/auth/login/:
+    post:
+      operationId: auth_auth_login_create
+      summary: User Login
+      description: |
+        Authenticate user with email/username and password to receive JWT tokens.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 10 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Login credentials
+        schema:
+          $ref: '#/definitions/UserLogin'
+        example:
+          email_or_username: "user@example.com"
+          password: "password123"
+      responses:
+        '201':
+          description: Login successful
+          schema:
+            type: object
+            properties:
+              access:
+                type: string
+                description: JWT access token
+                example: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzA1MzI0NjAwLCJpYXQiOjE3MDUzMjEwMDAsImp0aSI6IjEyMzQ1Njc4OTAiLCJ1c2VyX2lkIjoxfQ.example_signature"
+              refresh:
+                type: string
+                description: JWT refresh token
+                example: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTcwNTQwNzQwMCwiaWF0IjoxNzA1MzIxMDAwLCJqdGkiOiIxMjM0NTY3ODkwIiwidXNlcl9pZCI6MX0.example_signature"
+              user:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  email:
+                    type: string
+                    example: "user@example.com"
+                  first_name:
+                    type: string
+                    example: "John"
+                  last_name:
+                    type: string
+                    example: "Doe"
+                  username:
+                    type: string
+                    example: "johndoe"
+        '400':
+          description: Bad request - validation errors
+          schema:
+            type: object
+            properties:
+              email_or_username:
+                type: array
+                items:
+                  type: string
+                example: ["This field is required."]
+              password:
+                type: array
+                items:
+                  type: string
+                example: ["This field is required."]
+        '401':
+          description: Invalid credentials
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "No active account found with the given credentials"
+        '429':
+          description: Rate limit exceeded
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Request limit exceeded. Try again in 60 seconds."
+      tags:
+      - Authentication
+    parameters: []
+  /auth/auth/logout/:
+    post:
+      operationId: auth_auth_logout_create
+      summary: User Logout
+      description: |
+        Logout user and invalidate refresh token.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters: []
+      responses:
+        '201':
+          description: Logout successful
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Successfully logged out."
+        '401':
+          description: Authentication required
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Authentication credentials were not provided."
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Authentication
+    parameters: []
+  /auth/auth/password/change/:
+    post:
+      operationId: auth_auth_password_change_create
+      summary: Change Password
+      description: |
+        Change user's password.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Password change data
+        schema:
+          $ref: '#/definitions/PasswordChange'
+        example:
+          old_password: "oldpassword123"
+          new_password: "newpassword123"
+          new_password_confirm: "newpassword123"
+      responses:
+        '201':
+          description: Password changed successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Password changed successfully."
+        '400':
+          description: Bad request - validation errors
+          schema:
+            type: object
+            properties:
+              old_password:
+                type: array
+                items:
+                  type: string
+                example: ["This field is required."]
+              new_password:
+                type: array
+                items:
+                  type: string
+                example: ["Password must be at least 8 characters long."]
+              new_password_confirm:
+                type: array
+                items:
+                  type: string
+                example: ["Passwords do not match."]
+        '401':
+          description: Authentication required
+        '403':
+          description: Invalid old password
+          schema:
+            type: object
+            properties:
+              old_password:
+                type: array
+                items:
+                  type: string
+                example: ["Invalid old password."]
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Authentication
+    parameters: []
+  /auth/auth/password/reset/:
+    post:
+      operationId: auth_auth_password_reset_create
+      summary: Request Password Reset
+      description: |
+        Request a password reset email to be sent.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 5 requests per hour
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Password reset request data
+        schema:
+          $ref: '#/definitions/PasswordReset'
+        example:
+          email: "user@example.com"
+      responses:
+        '201':
+          description: Password reset email sent
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Password reset email has been sent."
+        '400':
+          description: Bad request - validation errors
+          schema:
+            type: object
+            properties:
+              email:
+                type: array
+                items:
+                  type: string
+                example: ["Enter a valid email address."]
+        '429':
+          description: Rate limit exceeded
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Too many password reset requests. Try again later."
+      tags:
+      - Authentication
+    parameters: []
+  /auth/auth/password/reset/{uidb64}/{token}/:
+    post:
+      operationId: auth_auth_password_reset_confirm_create
+      summary: Confirm Password Reset
+      description: |
+        Confirm password reset with token and set new password.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 10 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: New password data
+        schema:
+          $ref: '#/definitions/PasswordResetConfirm'
+        example:
+          token: "abc123def456"
+          new_password: "newpassword123"
+          new_password_confirm: "newpassword123"
+      - name: uidb64
+        in: path
+        required: true
+        type: string
+        description: Base64 encoded user ID
+        example: "MQ"
+      - name: token
+        in: path
+        required: true
+        type: string
+        description: Password reset token
+        example: "abc123def456"
+      responses:
+        '201':
+          description: Password reset successful
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Password has been reset successfully."
+        '400':
+          description: Bad request - validation errors
+          schema:
+            type: object
+            properties:
+              token:
+                type: array
+                items:
+                  type: string
+                example: ["This field is required."]
+              new_password:
+                type: array
+                items:
+                  type: string
+                example: ["Password must be at least 8 characters long."]
+              new_password_confirm:
+                type: array
+                items:
+                  type: string
+                example: ["Passwords do not match."]
+        '404':
+          description: Invalid reset link
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Invalid password reset link."
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Authentication
+    parameters:
+    - name: uidb64
+      in: path
+      required: true
+      type: string
+      description: Base64 encoded user ID
+      example: "MQ"
+    - name: token
+      in: path
+      required: true
+      type: string
+      description: Password reset token
+      example: "abc123def456"
+  /auth/auth/profile/:
+    get:
+      operationId: auth_auth_profile_read
+      summary: Get User Profile
+      description: |
+        Retrieve the authenticated user's profile information.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters: []
+      responses:
+        '200':
+          description: Profile retrieved successfully
+          schema:
+            $ref: '#/definitions/UserProfile'
+          example:
+            id: 1
+            email: "user@example.com"
+            username: "johndoe"
+            first_name: "John"
+            last_name: "Doe"
+            phone: "+2348012345678"
+            avatar: "http://127.0.0.1:8000/media/avatars/user1.jpg"
+            date_of_birth: "1990-01-01"
+            referral_code: "JOHN123"
+            date_joined: "2024-01-01T00:00:00Z"
+        '401':
+          description: Authentication required
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Authentication
+    put:
+      operationId: auth_auth_profile_update
+      summary: Update User Profile (Full)
+      description: |
+        Update user profile with complete data (all fields required).
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Complete profile data
+        schema:
+          $ref: '#/definitions/UserProfile'
+        example:
+          first_name: "John"
+          last_name: "Doe"
+          phone: "+2348012345678"
+          date_of_birth: "1990-01-01"
+      responses:
+        '200':
+          description: Profile updated successfully
+          schema:
+            $ref: '#/definitions/UserProfile'
+        '400':
+          description: Bad request - validation errors
+        '401':
+          description: Authentication required
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Authentication
+    patch:
+      operationId: auth_auth_profile_partial_update
+      summary: Update User Profile (Partial)
+      description: |
+        Update specific fields of user profile.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Partial profile data
+        schema:
+          $ref: '#/definitions/UserProfile'
+        example:
+          phone: "+2348098765432"
+          date_of_birth: "1990-01-01"
+      responses:
+        '200':
+          description: Profile updated successfully
+          schema:
+            $ref: '#/definitions/UserProfile'
+        '400':
+          description: Bad request - validation errors
+        '401':
+          description: Authentication required
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Authentication
+    parameters: []
+  /auth/auth/referrals/:
+    get:
+      operationId: auth_auth_referrals_list
+      summary: Get User Referrals
+      description: |
+        Get user's referral information and statistics.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters: []
+      responses:
+        '200':
+          description: Referral information retrieved successfully
+          schema:
+            type: object
+            properties:
+              referral_code:
+                type: string
+                example: "JOHN123"
+              total_referrals:
+                type: integer
+                example: 5
+              successful_referrals:
+                type: integer
+                example: 3
+              total_earned:
+                type: integer
+                example: 1500
+              referrals:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    email:
+                      type: string
+                      example: "friend@example.com"
+                    status:
+                      type: string
+                      example: "completed"
+                    joined_at:
+                      type: string
+                      format: date-time
+                      example: "2024-01-15T10:30:00Z"
+                    points_earned:
+                      type: integer
+                      example: 500
+        '401':
+          description: Authentication required
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Authentication
+    parameters: []
+  /auth/auth/register/:
+    post:
+      operationId: auth_auth_register_create
+      summary: User Registration
+      description: |
+        Create a new user account.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 5 requests per hour
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Registration data
+        schema:
+          $ref: '#/definitions/UserRegistration'
+        example:
+          email: "newuser@example.com"
+          username: "newuser"
+          first_name: "Jane"
+          last_name: "Smith"
+          phone: "+2348012345678"
+          password: "password123"
+          password_confirm: "password123"
+          referral_code: "JOHN123"
+          date_of_birth: "1995-05-15"
+      responses:
+        '201':
+          description: User registered successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "User registered successfully. Please check your email for verification."
+              user:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 2
+                  email:
+                    type: string
+                    example: "newuser@example.com"
+                  username:
+                    type: string
+                    example: "newuser"
+                  first_name:
+                    type: string
+                    example: "Jane"
+                  last_name:
+                    type: string
+                    example: "Smith"
+        '400':
+          description: Bad request - validation errors
+          schema:
+            type: object
+            properties:
+              email:
+                type: array
+                items:
+                  type: string
+                example: ["A user with this email already exists."]
+              username:
+                type: array
+                items:
+                  type: string
+                example: ["A user with this username already exists."]
+              password:
+                type: array
+                items:
+                  type: string
+                example: ["Password must be at least 8 characters long."]
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Authentication
+    parameters: []
+  /auth/auth/social/login/:
+    post:
+      operationId: auth_auth_social_login_create
+      summary: Social Authentication
+      description: |
+        Authenticate user using social media accounts (Google, Facebook, Apple).
+        
+        **Authentication Required**: No
+        **Rate Limit**: 10 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Social login data
+        schema:
+          $ref: '#/definitions/SocialLogin'
+        example:
+          provider: "google"
+          access_token: "ya29.a0AfH6SMC..."
+          provider_user_id: "123456789"
+          email: "user@gmail.com"
+          first_name: "John"
+          last_name: "Doe"
+          avatar_url: "https://lh3.googleusercontent.com/a/default-user"
+      responses:
+        '201':
+          description: Social login successful
+          schema:
+            type: object
+            properties:
+              access:
+                type: string
+                description: JWT access token
+                example: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+              refresh:
+                type: string
+                description: JWT refresh token
+                example: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+              user:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  email:
+                    type: string
+                    example: "user@gmail.com"
+                  first_name:
+                    type: string
+                    example: "John"
+                  last_name:
+                    type: string
+                    example: "Doe"
+        '400':
+          description: Bad request - validation errors
+        '401':
+          description: Invalid social credentials
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Authentication
+    parameters: []
+  /auth/auth/token/refresh/:
+    post:
+      operationId: auth_auth_token_refresh_create
+      summary: Refresh Access Token
+      description: |
+        Get a new access token using a valid refresh token.
+        
+        **Authentication Required**: No (but requires valid refresh token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: refresh
+        in: body
+        required: true
+        description: Refresh token
+        schema:
+          type: object
+          required:
+          - refresh
+          properties:
+            refresh:
+              type: string
+              description: Valid refresh token
+              example: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+        example:
+          refresh: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+      responses:
+        '201':
+          description: Token refreshed successfully
+          schema:
+            type: object
+            properties:
+              access:
+                type: string
+                description: New JWT access token
+                example: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+        '400':
+          description: Bad request - refresh token required
+        '401':
+          description: Invalid refresh token
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Token is invalid or expired"
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Authentication
+    parameters: []
+  /loyalty/loyalty-card/:
+    get:
+      operationId: loyalty_loyalty-card_list
+      summary: Get Loyalty Card
+      description: |
+        Retrieve the authenticated user's loyalty card information including tier details and benefits.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+        
+        **Loyalty Tiers**:
+        - **Bronze**: 0-999 points (1.0x multiplier, ₦50 delivery threshold)
+        - **Silver**: 1,000-4,999 points (1.1x multiplier, ₦30 delivery threshold)
+        - **Gold**: 5,000-9,999 points (1.2x multiplier, ₦20 delivery threshold)
+        - **Platinum**: 10,000+ points (1.5x multiplier, free delivery)
+      parameters: []
+      responses:
+        '200':
+          description: Loyalty card retrieved successfully
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              data:
+                $ref: '#/definitions/LoyaltyCard'
+              message:
+                type: string
+                example: "Loyalty card retrieved successfully"
+        '401':
+          description: Authentication required
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Authentication credentials were not provided."
+        '500':
+          description: Internal server error
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: string
+                example: "Error retrieving loyalty card: Database connection failed"
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Loyalty
+    parameters: []
+  /loyalty/points/:
+    get:
+      operationId: loyalty_points_read
+      summary: Get User Points Balance
+      description: |
+        Retrieve the current user's loyalty points balance and statistics.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters: []
+      responses:
+        '200':
+          description: User points balance retrieved successfully
+          schema:
+            type: object
+            properties:
+              balance:
+                type: integer
+                description: Current points balance
+              total_earned:
+                type: integer
+                description: Total points earned to date
+              total_spent:
+                type: integer
+                description: Total points spent to date
+              created_at:
+                type: string
+                format: date-time
+                description: When points account was created
+              updated_at:
+                type: string
+                format: date-time
+                description: When points were last updated
+        '401':
+          description: Authentication required
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Authentication credentials were not provided."
+        '429':
+          description: Rate limit exceeded
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Request limit exceeded. Try again in 60 seconds."
+      tags:
+      - Loyalty
+    parameters: []
+  /loyalty/points/calculate-earning/:
+    post:
+      operationId: loyalty_points_calculate-earning_create
+      summary: Calculate Points Earning
+      description: |
+        Calculate points that would be earned from an order amount.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Order data for points calculation
+        schema:
+          type: object
+          required:
+          - order_amount
+          properties:
+            order_amount:
+              type: string
+              format: decimal
+              description: Total order amount
+              example: "25.99"
+            order_type:
+              type: string
+              enum: [delivery, pickup, dine_in]
+              description: Type of order
+              example: "delivery"
+        example:
+          order_amount: "25.99"
+          order_type: "delivery"
+      responses:
+        '201':
+          description: Points calculation successful
+          schema:
+            type: object
+            properties:
+              order_amount:
+                type: string
+                format: decimal
+                example: "25.99"
+              points_earned:
+                type: integer
+                example: 300
+              base_rate:
+                type: integer
+                example: 10
+              bonus_multiplier:
+                type: string
+                format: decimal
+                example: "1.5"
+              calculation_breakdown:
+                type: object
+                properties:
+                  base_points:
+                    type: integer
+                    example: 200
+                  bonus_points:
+                    type: integer
+                    example: 100
+        '400':
+          description: Bad request - validation errors
+        '401':
+          description: Authentication required
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Loyalty
+    parameters: []
+  /loyalty/points/history/:
+    get:
+      operationId: loyalty_points_history_list
+      summary: Get Points History
+      description: |
+        Get user's points transaction history with pagination.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: search
+        in: query
+        description: Search transactions by reason or type
+        required: false
+        type: string
+        example: "order"
+      - name: ordering
+        in: query
+        description: Order results by field (e.g., 'created_at', '-created_at' for descending)
+        required: false
+        type: string
+        enum: [created_at, -created_at, amount, -amount, transaction_type]
+        example: "-created_at"
+      - name: page
+        in: query
+        description: Page number for pagination (default: 1)
+        required: false
+        type: integer
+        minimum: 1
+        example: 1
+      - name: page_size
+        in: query
+        description: Number of items per page (default: 20, max: 100)
+        required: false
+        type: integer
+        minimum: 1
+        maximum: 100
+        example: 20
+      - name: transaction_type
+        in: query
+        description: Filter by transaction type
+        required: false
+        type: string
+        enum: [earned, spent, expired, bonus, referral, birthday, first_order, physical_visit]
+        example: "earned"
+      responses:
+        '200':
+          description: Points history retrieved successfully
+          schema:
+            required:
+            - count
+            - results
+            type: object
+            properties:
+              count:
+                type: integer
+                description: Total number of transactions
+                example: 15
+              next:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for next page (null if no next page)
+                example: "http://127.0.0.1:8000/api/loyalty/points/history/?page=2"
+              previous:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for previous page (null if no previous page)
+                example: null
+              results:
+                type: array
+                items:
+                  $ref: '#/definitions/PointsTransaction'
+          example:
+            count: 15
+            next: "http://127.0.0.1:8000/api/loyalty/points/history/?page=2"
+            previous: null
+            results:
+              - id: 1
+                amount: 300
+                transaction_type: "earned"
+                transaction_type_display: "Order Points"
+                reason: "Order #ORD-001 - Amount: $25.99"
+                balance_after: 1250
+                order: 1
+                created_at: "2024-01-15T10:30:00Z"
+        '401':
+          description: Authentication required
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Loyalty
+    parameters: []
+  /loyalty/referral/process/:
+    post:
+      operationId: loyalty_referral_process_create
+      summary: Process Referral Bonus
+      description: |
+        Process referral bonus for a new user who used a referral code.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Referral data
+        schema:
+          type: object
+          required:
+          - referred_user_id
+          properties:
+            referred_user_id:
+              type: integer
+              description: ID of the user who was referred
+              example: 2
+            referral_code:
+              type: string
+              description: Referral code used
+              example: "JOHN123"
+        example:
+          referred_user_id: 2
+          referral_code: "JOHN123"
+      responses:
+        '201':
+          description: Referral bonus processed successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Referral bonus processed successfully."
+              referrer_points:
+                type: integer
+                example: 500
+              referred_user_points:
+                type: integer
+                example: 250
+              referrer_new_balance:
+                type: integer
+                example: 1750
+        '400':
+          description: Bad request - validation errors
+          schema:
+            type: object
+            properties:
+              referred_user_id:
+                type: array
+                items:
+                  type: string
+                example: ["Invalid referred user."]
+        '401':
+          description: Authentication required
+        '403':
+          description: Cannot refer yourself
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Cannot refer yourself."
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Loyalty
+    parameters: []
+  /loyalty/regenerate-qr/:
+    post:
+      operationId: loyalty_regenerate-qr_create
+      summary: Regenerate QR Code
+      description: |
+        Regenerate QR code for user's loyalty card.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 10 requests per hour
+      parameters: []
+      responses:
+        '201':
+          description: QR code regenerated successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "QR code regenerated successfully."
+              qr_code:
+                type: string
+                example: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+              updated_at:
+                type: string
+                format: date-time
+                example: "2024-01-15T10:30:00Z"
+        '401':
+          description: Authentication required
+        '429':
+          description: Rate limit exceeded
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Too many QR regeneration requests. Try again later."
+      tags:
+      - Loyalty
+    parameters: []
+  /loyalty/rewards/available/:
+    get:
+      operationId: loyalty_rewards_available_list
+      summary: Get Available Rewards
+      description: |
+        List all available rewards for redemption.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: search
+        in: query
+        description: Search rewards by name or description
+        required: false
+        type: string
+        example: "discount"
+      - name: ordering
+        in: query
+        description: Order results by field
+        required: false
+        type: string
+        enum: [points_required, -points_required, name, -name, valid_from, -valid_from]
+        example: "points_required"
+      - name: page
+        in: query
+        description: Page number for pagination (default: 1)
+        required: false
+        type: integer
+        minimum: 1
+        example: 1
+      - name: page_size
+        in: query
+        description: Number of items per page (default: 20, max: 100)
+        required: false
+        type: integer
+        minimum: 1
+        maximum: 100
+        example: 20
+      - name: reward_type
+        in: query
+        description: Filter by reward type
+        required: false
+        type: string
+        enum: [discount, free_item, free_delivery, cashback]
+        example: "discount"
+      responses:
+        '200':
+          description: Available rewards retrieved successfully
+          schema:
+            required:
+            - count
+            - results
+            type: object
+            properties:
+              count:
+                type: integer
+                description: Total number of available rewards
+                example: 8
+              next:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for next page (null if no next page)
+                example: null
+              previous:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for previous page (null if no previous page)
+                example: null
+              results:
+                type: array
+                items:
+                  $ref: '#/definitions/Reward'
+          example:
+            count: 8
+            next: null
+            previous: null
+            results:
+              - id: 1
+                name: "20% Off Next Order"
+                description: "Get 20% off your next order"
+                reward_type: "discount"
+                reward_type_display: "Discount"
+                points_required: 500
+                discount_percentage: "20.00"
+                is_active: true
+                is_available: true
+                can_redeem: "Yes"
+                valid_from: "2024-01-01T00:00:00Z"
+        '401':
+          description: Authentication required
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Loyalty
+    parameters: []
+  /loyalty/rewards/my-rewards/:
+    get:
+      operationId: loyalty_rewards_my-rewards_list
+      summary: Get My Redeemed Rewards
+      description: |
+        Get user's redeemed rewards with status and usage information.
+        
+        **Note**: This endpoint automatically checks and updates expired rewards before filtering. Rewards that have passed their expiration date will be marked as 'expired' status.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: status
+        in: query
+        description: Filter by reward status (active, used, expired)
+        required: false
+        type: string
+        enum: [active, used, expired]
+        example: "active"
+      - name: reward_type
+        in: query
+        description: Filter by reward type (discount, free_item, free_delivery, cashback)
+        required: false
+        type: string
+        enum: [discount, free_item, free_delivery, cashback]
+        example: "discount"
+      - name: date_from
+        in: query
+        description: Filter rewards redeemed from this date (YYYY-MM-DD format)
+        required: false
+        type: string
+        format: date
+        example: "2024-01-01"
+      - name: date_to
+        in: query
+        description: Filter rewards redeemed until this date (YYYY-MM-DD format)
+        required: false
+        type: string
+        format: date
+        example: "2024-12-31"
+      - name: ordering
+        in: query
+        description: Order results by field
+        required: false
+        type: string
+        enum: [redeemed_at, -redeemed_at, status, -status, points_spent, -points_spent]
+        example: "-redeemed_at"
+      - name: page
+        in: query
+        description: Page number for pagination (default: 1)
+        required: false
+        type: integer
+        minimum: 1
+        example: 1
+      - name: page_size
+        in: query
+        description: Number of items per page (default: 20, max: 100)
+        required: false
+        type: integer
+        minimum: 1
+        maximum: 100
+        example: 20
+      responses:
+        '200':
+          description: User rewards retrieved successfully
+          schema:
+            required:
+            - count
+            - results
+            type: object
+            properties:
+              count:
+                type: integer
+                description: Total number of user rewards
+                example: 5
+              next:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for next page (null if no next page)
+                example: null
+              previous:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for previous page (null if no previous page)
+                example: null
+              results:
+                type: array
+                items:
+                  $ref: '#/definitions/UserReward'
+          example:
+            count: 5
+            next: null
+            previous: null
+            results:
+              - id: 1
+                reward: 1
+                reward_name: "20% Off Next Order"
+                reward_description: "Get 20% off your next order"
+                reward_type: "discount"
+                points_spent: 500
+                status: "active"
+                status_display: "Active"
+                redeemed_at: "2024-01-10T10:30:00Z"
+                expires_at: "2024-02-10T10:30:00Z"
+        '401':
+          description: Authentication required
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Loyalty
+    parameters: []
+  /loyalty/rewards/redeem/:
+    post:
+      operationId: loyalty_rewards_redeem_create
+      summary: Redeem Reward
+      description: |
+        Redeem a reward using loyalty points.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Reward redemption data
+        schema:
+          type: object
+          required:
+          - reward_id
+          properties:
+            reward_id:
+              type: integer
+              description: ID of the reward to redeem
+              example: 1
+        example:
+          reward_id: 1
+      responses:
+        '201':
+          description: Reward redeemed successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Reward redeemed successfully!"
+              reward:
+                $ref: '#/definitions/UserReward'
+              points_remaining:
+                type: integer
+                example: 750
+        '400':
+          description: Bad request - validation errors
+          schema:
+            type: object
+            properties:
+              reward_id:
+                type: array
+                items:
+                  type: string
+                example: ["This field is required."]
+        '401':
+          description: Authentication required
+        '403':
+          description: Insufficient points or reward not available
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Insufficient points to redeem this reward."
+        '404':
+          description: Reward not found
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Loyalty
+    parameters: []
+  /loyalty/rewards/{reward_id}/use/:
+    post:
+      operationId: loyalty_rewards_use_create
+      summary: Use Redeemed Reward
+      description: |
+        Use a redeemed reward in an order.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: reward_id
+        in: path
+        required: true
+        type: integer
+        description: ID of the redeemed reward to use
+        example: 1
+      - name: data
+        in: body
+        required: true
+        description: Order data for using reward
+        schema:
+          type: object
+          required:
+          - order_id
+          properties:
+            order_id:
+              type: integer
+              description: ID of the order to apply reward to
+              example: 1
+        example:
+          order_id: 1
+      responses:
+        '201':
+          description: Reward used successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Reward applied to order successfully!"
+              reward:
+                $ref: '#/definitions/UserReward'
+              order:
+                type: integer
+                example: 1
+              discount_applied:
+                type: string
+                format: decimal
+                example: "5.20"
+        '400':
+          description: Bad request - validation errors
+        '401':
+          description: Authentication required
+        '403':
+          description: Reward cannot be used
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "This reward has already been used."
+        '404':
+          description: Reward or order not found
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Loyalty
+    parameters:
+    - name: reward_id
+      in: path
+      required: true
+      type: integer
+      description: ID of the redeemed reward to use
+      example: 1
+  /loyalty/scan-card/:
+    post:
+      operationId: loyalty_scan-card_create
+      summary: Scan Loyalty Card
+      description: |
+        Scan a loyalty card QR code and award points to the user.
+        
+        **Authentication Required**: Yes (Bearer token - admin/staff only)
+        **Rate Limit**: 100 requests per minute
+        
+        **Note**: This endpoint is for staff to scan customer loyalty cards during physical visits.
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: QR code scan data
+        schema:
+          $ref: '#/definitions/QRCodeScan'
+        example:
+          qr_code: "123"
+          visit_amount: "25.00"
+          visit_type: "lunch"
+      responses:
+        '200':
+          description: Loyalty card scanned successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Loyalty card scanned successfully."
+              user:
+                type: string
+                example: "user@example.com"
+              points_awarded:
+                type: integer
+                example: 300
+              new_balance:
+                type: integer
+                example: 1550
+              scan_time:
+                type: string
+                format: date-time
+                example: "2024-01-15T10:30:00Z"
+        '400':
+          description: Bad request - validation errors
+          schema:
+            type: object
+            properties:
+              qr_code:
+                type: array
+                items:
+                  type: string
+                example: ["Invalid QR code format."]
+        '401':
+          description: Authentication required
+        '403':
+          description: Insufficient permissions
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "You do not have permission to perform this action."
+        '404':
+          description: User not found
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "User not found for this QR code."
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Loyalty
+    parameters: []
+  /loyalty/summary/:
+    get:
+      operationId: loyalty_summary_list
+      summary: Get Loyalty Summary
+      description: |
+        Get comprehensive loyalty summary for the authenticated user.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters: []
+      responses:
+        '200':
+          description: Loyalty summary retrieved successfully
+          schema:
+            type: object
+            properties:
+              user_info:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  email:
+                    type: string
+                    example: "user@example.com"
+                  referral_code:
+                    type: string
+                    example: "JOHN123"
+              loyalty_card:
+                allOf:
+                - $ref: '#/definitions/LoyaltyCard'
+                - type: object
+                  properties:
+                    next_tier:
+                      type: string
+                      enum: [bronze, silver, gold, platinum]
+                      example: "gold"
+                    points_to_next_tier:
+                      type: integer
+                      example: 250
+              points_summary:
+                type: object
+                properties:
+                  current_balance:
+                    type: integer
+                    example: 1250
+                  total_earned:
+                    type: integer
+                    example: 1500
+                  total_spent:
+                    type: integer
+                    example: 250
+                  monthly_earned:
+                    type: integer
+                    example: 300
+              rewards_summary:
+                type: object
+                properties:
+                  available_rewards:
+                    type: integer
+                    example: 8
+                  active_rewards:
+                    type: integer
+                    example: 3
+                  total_redeemed:
+                    type: integer
+                    example: 5
+        '401':
+          description: Authentication required
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Loyalty
+    parameters: []
+  /menu/categories/:
+    get:
+      operationId: menu_categories_list
+      summary: List Menu Categories
+      description: |
+        List all active menu categories with optional filtering and pagination.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: ordering
+        in: query
+        description: Order results by field (e.g., 'sort_order', 'name')
+        required: false
+        type: string
+        enum: [sort_order, -sort_order, name, -name, created_at, -created_at]
+        example: "sort_order"
+      - name: page
+        in: query
+        description: Page number for pagination (default: 1)
+        required: false
+        type: integer
+        minimum: 1
+        example: 1
+      - name: page_size
+        in: query
+        description: Number of items per page (default: 20, max: 100)
+        required: false
+        type: integer
+        minimum: 1
+        maximum: 100
+        example: 20
+      - name: is_active
+        in: query
+        description: Filter by active status
+        required: false
+        type: boolean
+        example: true
+      responses:
+        '200':
+          description: Menu categories retrieved successfully
+          schema:
+            required:
+            - count
+            - results
+            type: object
+            properties:
+              count:
+                type: integer
+                description: Total number of categories
+                example: 8
+              next:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for next page (null if no next page)
+                example: null
+              previous:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for previous page (null if no previous page)
+                example: null
+              results:
+                type: array
+                items:
+                  $ref: '#/definitions/Category'
+          example:
+            count: 8
+            next: null
+            previous: null
+            results:
+              - id: 1
+                name: "Appetizers"
+                description: "Start your meal right with our delicious appetizers"
+                image: "http://127.0.0.1:8000/media/categories/appetizers.jpg"
+                is_active: true
+                sort_order: 1
+                menu_items_count: "12"
+        '400':
+          description: Bad request - invalid parameters
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Menu
+    parameters: []
+  /menu/categories/{category_id}/items/:
+    get:
+      operationId: menu_categories_items_list
+      summary: Get Category Items
+      description: |
+        Get all menu items for a specific category.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: category_id
+        in: path
+        required: true
+        type: integer
+        description: ID of the category
+        example: 1
+      - name: page
+        in: query
+        description: Page number for pagination (default: 1)
+        required: false
+        type: integer
+        minimum: 1
+        example: 1
+      - name: page_size
+        in: query
+        description: Number of items per page (default: 20, max: 100)
+        required: false
+        type: integer
+        minimum: 1
+        maximum: 100
+        example: 20
+      - name: ordering
+        in: query
+        description: Order results by field
+        required: false
+        type: string
+        enum: [sort_order, -sort_order, name, -name, price, -price]
+        example: "sort_order"
+      - name: is_available
+        in: query
+        description: Filter by availability
+        required: false
+        type: boolean
+        example: true
+      responses:
+        '200':
+          description: Category items retrieved successfully
+          schema:
+            required:
+            - count
+            - results
+            type: object
+            properties:
+              count:
+                type: integer
+                description: Total number of items in category
+                example: 12
+              next:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for next page (null if no next page)
+                example: null
+              previous:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for previous page (null if no previous page)
+                example: null
+              results:
+                type: array
+                items:
+                  $ref: '#/definitions/MenuItem'
+          example:
+            count: 12
+            next: null
+            previous: null
+            results:
+              - id: 1
+                name: "Spring Rolls"
+                description: "Fresh vegetables wrapped in rice paper"
+                price: "8.99"
+                formatted_price: "$8.99"
+                category: 1
+                category_name: "Appetizers"
+                image: "http://127.0.0.1:8000/media/items/spring-rolls.jpg"
+                is_available: true
+                is_featured: false
+                preparation_time: 15
+        '404':
+          description: Category not found
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Category not found."
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Menu
+    parameters:
+    - name: category_id
+      in: path
+      required: true
+      type: integer
+      description: ID of the category
+      example: 1
+  /menu/categories/{id}/:
+    get:
+      operationId: menu_categories_read
+      summary: Get Category Details
+      description: |
+        Get detailed information about a specific menu category.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+      parameters: []
+      responses:
+        '200':
+          description: Category details retrieved successfully
+          schema:
+            $ref: '#/definitions/Category'
+          example:
+            id: 1
+            name: "Appetizers"
+            description: "Start your meal right with our delicious appetizers"
+            image: "http://127.0.0.1:8000/media/categories/appetizers.jpg"
+            is_active: true
+            sort_order: 1
+            menu_items_count: "12"
+        '404':
+          description: Category not found
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Category not found."
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Menu
+    parameters:
+    - name: id
+      in: path
+      description: A unique integer value identifying this category
+      required: true
+      type: integer
+      example: 1
+  /menu/featured/:
+    get:
+      operationId: menu_featured_list
+      summary: List Featured Items
+      description: |
+        List all featured menu items across all categories.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: ordering
+        in: query
+        description: Order results by field
+        required: false
+        type: string
+        enum: [sort_order, -sort_order, name, -name, price, -price]
+        example: "sort_order"
+      - name: page
+        in: query
+        description: Page number for pagination (default: 1)
+        required: false
+        type: integer
+        minimum: 1
+        example: 1
+      - name: page_size
+        in: query
+        description: Number of items per page (default: 20, max: 100)
+        required: false
+        type: integer
+        minimum: 1
+        maximum: 100
+        example: 20
+      - name: category
+        in: query
+        description: Filter by category ID
+        required: false
+        type: integer
+        example: 1
+      responses:
+        '200':
+          description: Featured items retrieved successfully
+          schema:
+            required:
+            - count
+            - results
+            type: object
+            properties:
+              count:
+                type: integer
+                description: Total number of featured items
+                example: 6
+              next:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for next page (null if no next page)
+                example: null
+              previous:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for previous page (null if no previous page)
+                example: null
+              results:
+                type: array
+                items:
+                  $ref: '#/definitions/FeaturedItems'
+          example:
+            count: 6
+            next: null
+            previous: null
+            results:
+              - id: 1
+                name: "Signature Fried Rice"
+                description: "Our famous fried rice with vegetables and choice of protein"
+                price: "15.99"
+                formatted_price: "$15.99"
+                category_name: "Main Dishes"
+                image: "http://127.0.0.1:8000/media/items/fried-rice.jpg"
+                is_available: true
+                preparation_time: 25
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Menu
+    parameters: []
+  /menu/items/:
+    get:
+      operationId: menu_items_list
+      summary: List Menu Items
+      description: |
+        List all available menu items with filtering, search, and pagination.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: category
+        in: query
+        description: Filter by category ID
+        required: false
+        type: integer
+        example: 1
+      - name: is_featured
+        in: query
+        description: Filter by featured status
+        required: false
+        type: boolean
+        example: true
+      - name: is_available
+        in: query
+        description: Filter by availability
+        required: false
+        type: boolean
+        example: true
+      - name: search
+        in: query
+        description: Search items by name or description
+        required: false
+        type: string
+        example: "rice"
+      - name: ordering
+        in: query
+        description: Order results by field
+        required: false
+        type: string
+        enum: [sort_order, -sort_order, name, -name, price, -price, preparation_time, -preparation_time]
+        example: "sort_order"
+      - name: page
+        in: query
+        description: Page number for pagination (default: 1)
+        required: false
+        type: integer
+        minimum: 1
+        example: 1
+      - name: page_size
+        in: query
+        description: Number of items per page (default: 20, max: 100)
+        required: false
+        type: integer
+        minimum: 1
+        maximum: 100
+        example: 20
+      - name: min_price
+        in: query
+        description: Minimum price filter
+        required: false
+        type: string
+        format: decimal
+        example: "5.00"
+      - name: max_price
+        in: query
+        description: Maximum price filter
+        required: false
+        type: string
+        format: decimal
+        example: "25.00"
+      responses:
+        '200':
+          description: Menu items retrieved successfully
+          schema:
+            required:
+            - count
+            - results
+            type: object
+            properties:
+              count:
+                type: integer
+                description: Total number of menu items
+              next:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for next page (null if no next page)
+              previous:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for previous page (null if no previous page)
+              results:
+                type: array
+                description: List of menu items
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      description: Menu item ID
+                    name:
+                      type: string
+                      description: Item name
+                    description:
+                      type: string
+                      description: Item description
+                    price:
+                      type: string
+                      format: decimal
+                      description: Item price
+                    formatted_price:
+                      type: string
+                      description: Formatted price with currency
+                    category:
+                      type: integer
+                      description: Category ID
+                    category_name:
+                      type: string
+                      description: Category name
+                    image:
+                      type: string
+                      format: uri
+                      description: Item image URL
+                    is_available:
+                      type: boolean
+                      description: Whether item is available
+                    is_featured:
+                      type: boolean
+                      description: Whether item is featured
+                    preparation_time:
+                      type: integer
+                      description: Preparation time in minutes
+        '400':
+          description: Bad request - invalid parameters
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Invalid filter parameters"
+        '429':
+          description: Rate limit exceeded
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Request limit exceeded. Try again in 60 seconds."
+      tags:
+      - Menu
+    parameters: []
+  /menu/items/{id}/:
+    get:
+      operationId: menu_items_read
+      summary: Get Menu Item Details
+      description: |
+        Get detailed information about a specific menu item.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+      parameters: []
+      responses:
+        '200':
+          description: Menu item details retrieved successfully
+          schema:
+            $ref: '#/definitions/MenuItemDetail'
+          example:
+            id: 1
+            name: "Spring Rolls"
+            description: "Fresh vegetables wrapped in rice paper with sweet chili sauce"
+            price: "8.99"
+            formatted_price: "$8.99"
+            category: 1
+            category_name: "Appetizers"
+            image: "http://127.0.0.1:8000/media/items/spring-rolls.jpg"
+            is_available: true
+            is_featured: false
+            preparation_time: 15
+            allergens:
+              nuts: false
+              dairy: false
+              gluten: true
+            nutritional_info:
+              calories: 120
+              protein: "3g"
+              carbs: "22g"
+              fat: "2g"
+            created_at: "2024-01-01T00:00:00Z"
+            updated_at: "2024-01-15T10:30:00Z"
+        '404':
+          description: Menu item not found
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Menu item not found."
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Menu
+    parameters:
+    - name: id
+      in: path
+      description: A unique integer value identifying this menu item
+      required: true
+      type: integer
+      example: 1
+  /menu/search/:
+    get:
+      operationId: menu_search_list
+      summary: Search Menu Items
+      description: |
+        Search menu items by name, description, or category with advanced filtering.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: q
+        in: query
+        description: Search query string
+        required: true
+        type: string
+        example: "spicy chicken"
+      - name: category
+        in: query
+        description: Filter by category ID
+        required: false
+        type: integer
+        example: 1
+      - name: is_available
+        in: query
+        description: Filter by availability
+        required: false
+        type: boolean
+        example: true
+      - name: ordering
+        in: query
+        description: Order results by relevance or other fields
+        required: false
+        type: string
+        enum: [relevance, name, -name, price, -price]
+        example: "relevance"
+      - name: page
+        in: query
+        description: Page number for pagination (default: 1)
+        required: false
+        type: integer
+        minimum: 1
+        example: 1
+      - name: page_size
+        in: query
+        description: Number of items per page (default: 20, max: 100)
+        required: false
+        type: integer
+        minimum: 1
+        maximum: 100
+        example: 20
+      responses:
+        '200':
+          description: Search results retrieved successfully
+          schema:
+            required:
+            - count
+            - results
+            - query
+            type: object
+            properties:
+              query:
+                type: string
+                description: The search query used
+                example: "spicy chicken"
+              count:
+                type: integer
+                description: Total number of search results
+                example: 8
+              next:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for next page (null if no next page)
+                example: null
+              previous:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for previous page (null if no previous page)
+                example: null
+              results:
+                type: array
+                items:
+                  $ref: '#/definitions/MenuItem'
+          example:
+            query: "spicy chicken"
+            count: 8
+            next: null
+            previous: null
+            results:
+              - id: 5
+                name: "Spicy Chicken Wings"
+                description: "Crispy wings tossed in our signature spicy sauce"
+                price: "12.99"
+                formatted_price: "$12.99"
+                category: 2
+                category_name: "Main Dishes"
+                image: "http://127.0.0.1:8000/media/items/spicy-chicken.jpg"
+                is_available: true
+                is_featured: true
+                preparation_time: 20
+        '400':
+          description: Bad request - search query required
+          schema:
+            type: object
+            properties:
+              q:
+                type: array
+                items:
+                  type: string
+                example: ["This field is required."]
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Menu
+    parameters: []
+  /orders/:
+    get:
+      operationId: orders_list
+      summary: List User Orders
+      description: |
+        List authenticated user's order history with filtering and pagination.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: search
+        in: query
+        description: Search orders by order number or customer name
+        required: false
+        type: string
+        example: "ORD-001"
+      - name: ordering
+        in: query
+        description: Order results by field (e.g., 'created_at', '-created_at' for descending)
+        required: false
+        type: string
+        enum: [created_at, -created_at, order_number, -order_number, total_amount, -total_amount]
+        example: "-created_at"
+      - name: page
+        in: query
+        description: Page number for pagination (default: 1)
+        required: false
+        type: integer
+        minimum: 1
+        example: 1
+      - name: page_size
+        in: query
+        description: Number of items per page (default: 20, max: 100)
+        required: false
+        type: integer
+        minimum: 1
+        maximum: 100
+        example: 20
+      - name: status
+        in: query
+        description: Filter by order status
+        required: false
+        type: string
+        enum: [pending, confirmed, preparing, ready, out_for_delivery, delivered, cancelled, refunded]
+        example: "confirmed"
+      - name: payment_status
+        in: query
+        description: Filter by payment status
+        required: false
+        type: string
+        enum: [pending, paid, failed, refunded]
+        example: "paid"
+      - name: delivery_type
+        in: query
+        description: Filter by delivery type
+        required: false
+        type: string
+        enum: [delivery, pickup]
+        example: "delivery"
+      responses:
+        '200':
+          description: User orders retrieved successfully
+          schema:
+            required:
+            - count
+            - results
+            type: object
+            properties:
+              count:
+                type: integer
+                description: Total number of orders
+                example: 15
+              next:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for next page (null if no next page)
+                example: "http://127.0.0.1:8000/api/orders/?page=2"
+              previous:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for previous page (null if no previous page)
+                example: null
+              results:
+                type: array
+                items:
+                  $ref: '#/definitions/OrderList'
+          example:
+            count: 15
+            next: "http://127.0.0.1:8000/api/orders/?page=2"
+            previous: null
+            results:
+              - id: 1
+                order_number: "ORD-001"
+                customer_name: "John Doe"
+                delivery_type: "delivery"
+                status: "confirmed"
+                payment_status: "paid"
+                total_amount: "25.99"
+                created_at: "2024-01-15T10:30:00Z"
+                items_count: "3"
+        '401':
+          description: Authentication required
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Orders
+    parameters: []
+  /orders/calculate-delivery-fee/:
+    post:
+      operationId: orders_calculate-delivery-fee_create
+      summary: Validate Delivery Fee
+      description: |
+        Validate delivery fee amount provided by the frontend.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Delivery fee validation data
+        schema:
+          type: object
+          required:
+          - delivery_fee
+          properties:
+            delivery_fee:
+              type: string
+              format: decimal
+              description: Delivery fee amount to validate
+              example: "5.00"
+            delivery_type:
+              type: string
+              enum: [delivery, pickup]
+              description: Type of delivery
+              example: "delivery"
+        example:
+          delivery_fee: "5.00"
+          delivery_type: "delivery"
+      responses:
+        '201':
+          description: Delivery fee validated successfully
+          schema:
+            type: object
+            properties:
+              delivery_fee:
+                type: string
+                format: decimal
+                example: "5.00"
+              delivery_type:
+                type: string
+                example: "delivery"
+              message:
+                type: string
+                example: "Delivery fee validated successfully"
+        '400':
+          description: Bad request - validation errors
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Orders
+    parameters: []
+  /orders/calculate-totals/:
+    post:
+      operationId: orders_calculate-totals_create
+      summary: Calculate Order Totals
+      description: |
+        Calculate cart totals including tax, delivery fees, and discounts.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Order calculation data
+        schema:
+          type: object
+          required:
+          - items
+          - delivery_fee
+          properties:
+            items:
+              type: array
+              description: Order items
+              items:
+                type: object
+                properties:
+                  menu_item:
+                    type: integer
+                    description: Menu item ID
+                  quantity:
+                    type: integer
+                    description: Quantity of the item
+                    minimum: 1
+            delivery_type:
+              type: string
+              enum: [delivery, pickup]
+              description: Type of delivery
+            delivery_fee:
+              type: string
+              format: decimal
+              description: Delivery fee amount (0 for pickup orders, must be non-negative)
+              example: "5.00"
+            promo_code:
+              type: string
+              description: Promotional code to apply
+        example:
+          items:
+            - menu_item: 1
+              quantity: 2
+            - menu_item: 3
+              quantity: 1
+          delivery_type: "delivery"
+          delivery_fee: "5.00"
+          promo_code: "SAVE20"
+      responses:
+        '201':
+          description: Order totals calculated successfully
+          schema:
+            type: object
+            properties:
+              subtotal:
+                type: string
+                format: decimal
+                description: Subtotal before tax and fees
+              tax_amount:
+                type: string
+                format: decimal
+                description: Tax amount
+              delivery_fee:
+                type: string
+                format: decimal
+                description: Delivery fee
+              discount_amount:
+                type: string
+                format: decimal
+                description: Discount amount from promo code
+              total_amount:
+                type: string
+                format: decimal
+                description: Final total amount
+              breakdown:
+                type: object
+                description: Detailed breakdown of calculations
+                properties:
+                  items_total:
+                    type: string
+                    format: decimal
+                    description: Total of all items
+                  tax_rate:
+                    type: string
+                    format: decimal
+                    description: Applied tax rate percentage
+                  discount_percentage:
+                    type: string
+                    format: decimal
+                    description: Applied discount percentage
+        '400':
+          description: Bad request - validation errors
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Invalid order data"
+              details:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Order must contain at least one item"]
+        '429':
+          description: Rate limit exceeded
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Request limit exceeded. Try again in 60 seconds."
+      tags:
+      - Orders
+    parameters: []
+  /orders/create/:
+    post:
+      operationId: orders_create_create
+      summary: Create New Order
+      description: |
+        Create a new order for both authenticated and guest users.
+        
+        **Authentication Required**: No (works for both authenticated and guest users)
+        **Rate Limit**: 100 requests per minute
+        
+        **Features**:
+        - Works for both authenticated users and guest users
+        - Mandatory customer information (name, email, phone)
+        - Address required for delivery orders
+        - Minimum order amount of ₦500.00
+        - Graceful handling of order items
+        - Loyalty points integration (commented out)
+        
+        **Customer Information Requirements**:
+        - `customer_name`: Full name (mandatory)
+        - `customer_email`: Email address (mandatory)
+        - `customer_phone`: Phone number, max 15 characters (mandatory)
+        
+        **Delivery Requirements**:
+        - For delivery orders: `delivery_address` is mandatory
+        - For pickup orders: `delivery_address` is optional
+        
+        **Order Validation**:
+        - Minimum order amount: ₦500.00 (even with discounts/rewards)
+        - Order items are mandatory
+        - Total amount calculation validation
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Order data
+        schema:
+          type: object
+          required:
+          - items
+          - customer_name
+          - customer_email
+          - customer_phone
+          properties:
+            items:
+              type: array
+              description: List of order items (mandatory)
+              items:
+                type: object
+                required:
+                - menu_item
+                - quantity
+                properties:
+                  menu_item:
+                    type: integer
+                    description: Menu item ID
+                  quantity:
+                    type: integer
+                    description: Quantity of the item
+                    minimum: 1
+                  special_instructions:
+                    type: string
+                    description: Special instructions for this item
+            customer_name:
+              type: string
+              maxLength: 200
+              description: Customer's full name (mandatory)
+              example: "John Doe"
+            customer_email:
+              type: string
+              format: email
+              description: Customer's email address (mandatory)
+              example: "john.doe@example.com"
+            customer_phone:
+              type: string
+              maxLength: 15
+              description: Customer's phone number (mandatory)
+              example: "+2348012345678"
+            delivery_type:
+              type: string
+              enum: [delivery, pickup]
+              description: Type of delivery
+              example: "delivery"
+            delivery_address:
+              type: string
+              maxLength: 500
+              description: Delivery address as text (required for delivery orders)
+              example: "123 Main Street, Wuse Zone 2, Abuja, FCT, Nigeria"
+            special_instructions:
+              type: string
+              description: General special instructions for the order
+              example: "Please deliver to the main entrance"
+            promo_code:
+              type: string
+              description: Promotional code to apply
+              example: "SAVE20"
+            subtotal:
+              type: string
+              format: decimal
+              description: Order subtotal (mandatory)
+              example: "25.99"
+            tax_amount:
+              type: string
+              format: decimal
+              description: Tax amount (mandatory)
+              example: "2.60"
+            total_amount:
+              type: string
+              format: decimal
+              description: Total amount (mandatory, minimum ₦500.00)
+              example: "28.59"
+            delivery_fee:
+              type: string
+              format: decimal
+              description: Delivery fee
+              example: "5.00"
+            discount_amount:
+              type: string
+              format: decimal
+              description: Discount amount
+              example: "5.00"
+        example:
+          items:
+            - menu_item: 1
+              quantity: 2
+              special_instructions: "Extra spicy please"
+            - menu_item: 3
+              quantity: 1
+          customer_name: "John Doe"
+          customer_email: "john.doe@example.com"
+          customer_phone: "+2348012345678"
+          delivery_type: "delivery"
+          delivery_address: "123 Main Street, Wuse Zone 2, Abuja, FCT, Nigeria"
+          special_instructions: "Please deliver to the main entrance"
+          promo_code: "SAVE20"
+          subtotal: "25.99"
+          tax_amount: "2.60"
+          delivery_fee: "5.00"
+          discount_amount: "5.00"
+          total_amount: "28.59"
+      responses:
+        '201':
+          description: Order created successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Order created successfully."
+              order:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    description: Order ID
+                    example: 1
+                  order_number:
+                    type: string
+                    description: Unique order number
+                    example: "ORD-001"
+                  user:
+                    type: integer
+                    description: User ID (null for guest orders)
+                    x-nullable: true
+                    example: 1
+                  guest_email:
+                    type: string
+                    description: Guest email (for guest orders)
+                    x-nullable: true
+                    example: "john.doe@example.com"
+                  guest_name:
+                    type: string
+                    description: Guest name (for guest orders)
+                    x-nullable: true
+                    example: "John Doe"
+                  guest_phone:
+                    type: string
+                    description: Guest phone (for guest orders)
+                    x-nullable: true
+                    example: "+2348012345678"
+                  delivery_type:
+                    type: string
+                    description: Delivery type
+                    example: "delivery"
+                  delivery_address:
+                    type: integer
+                    description: Delivery address ID
+                    x-nullable: true
+                    example: 1
+                  special_instructions:
+                    type: string
+                    description: Special instructions
+                    example: "Please deliver to the main entrance"
+                  subtotal:
+                    type: string
+                    format: decimal
+                    description: Subtotal amount
+                    example: "25.99"
+                  tax_amount:
+                    type: string
+                    format: decimal
+                    description: Tax amount
+                    example: "2.60"
+                  delivery_fee:
+                    type: string
+                    format: decimal
+                    description: Delivery fee
+                    example: "5.00"
+                  discount_amount:
+                    type: string
+                    format: decimal
+                    description: Discount amount
+                    example: "5.00"
+                  total_amount:
+                    type: string
+                    format: decimal
+                    description: Total amount
+                    example: "28.59"
+                  status:
+                    type: string
+                    description: Order status
+                    example: "pending"
+                  payment_status:
+                    type: string
+                    description: Payment status
+                    example: "pending"
+                  created_at:
+                    type: string
+                    format: date-time
+                    description: Creation timestamp
+                    example: "2024-01-15T10:30:00Z"
+                  items:
+                    type: array
+                    description: Order items
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          description: Order item ID
+                          example: 1
+                        menu_item:
+                          type: integer
+                          description: Menu item ID
+                          example: 1
+                        item_name:
+                          type: string
+                          description: Item name
+                          example: "Spring Rolls"
+                        quantity:
+                          type: integer
+                          description: Quantity
+                          example: 2
+                        unit_price:
+                          type: string
+                          format: decimal
+                          description: Unit price
+                          example: "8.99"
+                        total_price:
+                          type: string
+                          format: decimal
+                          description: Total price for this item
+                          example: "17.98"
+                        special_instructions:
+                          type: string
+                          description: Special instructions
+                          example: "Extra spicy please"
+        '400':
+          description: Bad request - validation errors
+          schema:
+            type: object
+            properties:
+              customer_name:
+                type: array
+                items:
+                  type: string
+                example: ["This field is required."]
+              customer_email:
+                type: array
+                items:
+                  type: string
+                example: ["Enter a valid email address."]
+              customer_phone:
+                type: array
+                items:
+                  type: string
+                example: ["This field is required."]
+              items:
+                type: array
+                items:
+                  type: string
+                example: ["Order must contain at least one item."]
+              delivery_address:
+                type: array
+                items:
+                  type: string
+                example: ["Delivery address is required for delivery orders."]
+              total_amount:
+                type: array
+                items:
+                  type: string
+                example: ["Minimum order amount is ₦500.00"]
+        '429':
+          description: Rate limit exceeded
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Request limit exceeded. Try again in 60 seconds."
+      tags:
+      - Orders
+    parameters: []
+  /orders/tracking/{order_number}/:
+    get:
+      operationId: orders_tracking_read
+      summary: Track Order
+      description: |
+        Track an order by order number (no authentication required).
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: order_number
+        in: path
+        required: true
+        type: string
+        description: Order number to track
+        example: "ORD-001"
+      responses:
+        '200':
+          description: Order tracking information retrieved successfully
+          schema:
+            type: object
+            properties:
+              order_number:
+                type: string
+                example: "ORD-001"
+              status:
+                type: string
+                example: "confirmed"
+              status_display:
+                type: string
+                example: "Confirmed"
+              estimated_delivery_time:
+                type: string
+                format: date-time
+                example: "2024-01-15T11:15:00Z"
+              current_location:
+                type: string
+                example: "Kitchen"
+              tracking_updates:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    status:
+                      type: string
+                      example: "confirmed"
+                    message:
+                      type: string
+                      example: "Order confirmed and being prepared"
+                    timestamp:
+                      type: string
+                      format: date-time
+                      example: "2024-01-15T10:30:00Z"
+              customer_name:
+                type: string
+                example: "John Doe"
+              total_amount:
+                type: string
+                format: decimal
+                example: "25.99"
+        '404':
+          description: Order not found
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Order not found."
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Orders
+    parameters:
+    - name: order_number
+      in: path
+      required: true
+      type: string
+      description: Order number to track
+      example: "ORD-001"
+  /orders/{id}/:
+    get:
+      operationId: orders_read
+      summary: Get Order Details
+      description: |
+        Get detailed information about a specific order.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters: []
+      responses:
+        '200':
+          description: Order details retrieved successfully
+          schema:
+            $ref: '#/definitions/OrderDetail'
+          example:
+            id: 1
+            order_number: "ORD-001"
+            user: 1
+            delivery_type: "delivery"
+            delivery_address: 1
+            special_instructions: "Please deliver to the main entrance"
+            subtotal: "25.99"
+            tax_amount: "2.60"
+            delivery_fee: "5.00"
+            discount_amount: "5.20"
+            total_amount: "28.39"
+            status: "confirmed"
+            payment_status: "paid"
+            estimated_delivery_time: "2024-01-15T11:15:00Z"
+            created_at: "2024-01-15T10:30:00Z"
+            items:
+              - id: 1
+                menu_item: 1
+                item_name: "Spring Rolls"
+                item_description: "Fresh vegetables wrapped in rice paper"
+                item_image: "http://127.0.0.1:8000/media/items/spring-rolls.jpg"
+                quantity: 2
+                unit_price: "8.99"
+                total_price: "17.98"
+                special_instructions: "Extra spicy please"
+            customer_name: "John Doe"
+            customer_email: "user@example.com"
+            customer_phone: "+2348012345678"
+        '401':
+          description: Authentication required
+        '403':
+          description: Access forbidden - not your order
+        '404':
+          description: Order not found
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Orders
+    parameters:
+    - name: id
+      in: path
+      required: true
+      type: integer
+      description: A unique integer value identifying this order
+      example: 1
+  /orders/{order_id}/cancel/:
+    post:
+      operationId: orders_cancel_create
+      summary: Cancel Order
+      description: |
+        Cancel an existing order.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+        
+        **Note**: Orders can only be cancelled if they haven't started preparation.
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        type: integer
+        description: ID of the order to cancel
+        example: 1
+      - name: data
+        in: body
+        required: false
+        description: Cancellation reason (optional)
+        schema:
+          type: object
+          properties:
+            reason:
+              type: string
+              description: Reason for cancellation
+              example: "Changed my mind"
+        example:
+          reason: "Changed my mind"
+      responses:
+        '201':
+          description: Order cancelled successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Order cancelled successfully."
+              order:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  status:
+                    type: string
+                    example: "cancelled"
+                  cancelled_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:35:00Z"
+        '400':
+          description: Bad request - order cannot be cancelled
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Order cannot be cancelled as it has already started preparation."
+        '401':
+          description: Authentication required
+        '403':
+          description: Access forbidden - not your order
+        '404':
+          description: Order not found
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Orders
+    parameters:
+    - name: order_id
+      in: path
+      required: true
+      type: integer
+      description: ID of the order to cancel
+      example: 1
+  /orders/{order_id}/status/:
+    put:
+      operationId: orders_status_update
+      summary: Update Order Status
+      description: |
+        Update order status (admin/staff functionality).
+        
+        **Authentication Required**: Yes (Bearer token - admin/staff only)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        type: integer
+        description: ID of the order to update
+        example: 1
+      - name: data
+        in: body
+        required: true
+        description: Status update data
+        schema:
+          type: object
+          required:
+          - status
+          properties:
+            status:
+              type: string
+              enum: [pending, confirmed, preparing, ready, out_for_delivery, delivered, cancelled, refunded]
+              example: "confirmed"
+            notes:
+              type: string
+              description: Additional notes about the status change
+              example: "Order confirmed and will be ready in 25 minutes"
+        example:
+          status: "confirmed"
+          notes: "Order confirmed and will be ready in 25 minutes"
+      responses:
+        '200':
+          description: Order status updated successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Order status updated successfully."
+              order:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  status:
+                    type: string
+                    example: "confirmed"
+                  updated_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:35:00Z"
+        '400':
+          description: Bad request - invalid status
+        '401':
+          description: Authentication required
+        '403':
+          description: Insufficient permissions
+        '404':
+          description: Order not found
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Orders
+    parameters:
+    - name: order_id
+      in: path
+      required: true
+      type: integer
+      description: ID of the order to update
+      example: 1
+  /payments/initialize/:
+    post:
+      operationId: payments_initialize_create
+      summary: Initialize Payment
+      description: |
+        Initialize Paystack payment for an order.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Payment initialization data
+        schema:
+          type: object
+          required:
+          - order_id
+          properties:
+            order_id:
+              type: integer
+              description: ID of the order to pay for
+              example: 1
+            callback_url:
+              type: string
+              format: uri
+              description: URL to redirect after payment
+              example: "https://chopsticksandbowls.com/payment/callback"
+        example:
+          order_id: 1
+          callback_url: "https://chopsticksandbowls.com/payment/callback"
+      responses:
+        '201':
+          description: Payment initialized successfully
+          schema:
+            type: object
+            properties:
+              authorization_url:
+                type: string
+                format: uri
+                description: Paystack checkout URL
+                example: "https://checkout.paystack.com/0xflwpqbfkpqknx"
+              reference:
+                type: string
+                description: Payment reference
+                example: "TXN123456789"
+              access_code:
+                type: string
+                description: Paystack access code
+                example: "ACC123456789"
+              amount:
+                type: string
+                format: decimal
+                description: Payment amount in kobo (smallest currency unit)
+                example: "283900"
+              currency:
+                type: string
+                description: Payment currency
+                example: "NGN"
+        '400':
+          description: Bad request - validation errors
+        '401':
+          description: Authentication required
+        '404':
+          description: Order not found
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Payments
+    parameters: []
+  /payments/verify/{reference}/:
+    get:
+      operationId: payments_verify_read
+      summary: Verify Payment
+      description: |
+        Verify payment status with Paystack using reference.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        type: string
+        description: Payment reference from Paystack
+        example: "TXN123456789"
+      responses:
+        '200':
+          description: Payment verification successful
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                description: Payment status
+                example: "success"
+              paystack_status:
+                type: string
+                description: Paystack payment status
+                example: "success"
+              order_status:
+                type: string
+                description: Updated order status
+                example: "paid"
+              amount:
+                type: string
+                format: decimal
+                description: Payment amount
+                example: "2839.00"
+              currency:
+                type: string
+                description: Payment currency
+                example: "NGN"
+              reference:
+                type: string
+                description: Payment reference
+                example: "TXN123456789"
+              order_id:
+                type: integer
+                description: Associated order ID
+                example: 1
+              customer_email:
+                type: string
+                format: email
+                description: Customer email
+                example: "user@example.com"
+              payment_date:
+                type: string
+                format: date-time
+                description: Payment completion date
+                example: "2024-01-15T10:35:00Z"
+        '400':
+          description: Bad request - invalid reference
+        '404':
+          description: Payment not found
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Payments
+    parameters:
+    - name: reference
+      in: path
+      required: true
+      type: string
+      description: Payment reference from Paystack
+      example: "TXN123456789"
+  /promotions/:
+    get:
+      operationId: promotions_list
+      summary: List All Promotions
+      description: |
+        List all promotional codes (admin only).
+        
+        **Authentication Required**: Yes (Bearer token - admin only)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: search
+        in: query
+        description: Search promotions by code or description
+        required: false
+        type: string
+        example: "SAVE20"
+      - name: ordering
+        in: query
+        description: Order results by field
+        required: false
+        type: string
+        enum: [created_at, -created_at, code, -code, valid_from, -valid_from]
+        example: "-created_at"
+      - name: page
+        in: query
+        description: Page number for pagination (default: 1)
+        required: false
+        type: integer
+        minimum: 1
+        example: 1
+      - name: page_size
+        in: query
+        description: Number of items per page (default: 20, max: 100)
+        required: false
+        type: integer
+        minimum: 1
+        maximum: 100
+        example: 20
+      - name: is_active
+        in: query
+        description: Filter by active status
+        required: false
+        type: boolean
+        example: true
+      responses:
+        '200':
+          description: Promotions retrieved successfully
+          schema:
+            required:
+            - count
+            - results
+            type: object
+            properties:
+              count:
+                type: integer
+                description: Total number of promotions
+                example: 5
+              next:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for next page (null if no next page)
+                example: null
+              previous:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for previous page (null if no previous page)
+                example: null
+              results:
+                type: array
+                items:
+                  $ref: '#/definitions/PromoCode'
+      tags:
+      - Promotions
+    parameters: []
+  /promotions/active/:
+    get:
+      operationId: promotions_active_list
+      summary: List Active Promotions
+      description: |
+        List all active promotional codes available for use.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: search
+        in: query
+        description: Search promotions by code or description
+        required: false
+        type: string
+        example: "SAVE20"
+      - name: ordering
+        in: query
+        description: Order results by field
+        required: false
+        type: string
+        enum: [valid_until, -valid_until, code, -code, discount_value, -discount_value]
+        example: "valid_until"
+      - name: page
+        in: query
+        description: Page number for pagination (default: 1)
+        required: false
+        type: integer
+        minimum: 1
+        example: 1
+      - name: page_size
+        in: query
+        description: Number of items per page (default: 20, max: 100)
+        required: false
+        type: integer
+        minimum: 1
+        maximum: 100
+        example: 20
+      - name: discount_type
+        in: query
+        description: Filter by discount type
+        required: false
+        type: string
+        enum: [percentage, fixed]
+        example: "percentage"
+      responses:
+        '200':
+          description: Active promotions retrieved successfully
+          schema:
+            required:
+            - count
+            - results
+            type: object
+            properties:
+              count:
+                type: integer
+                description: Total number of active promotions
+                example: 3
+              next:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for next page (null if no next page)
+                example: null
+              previous:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for previous page (null if no previous page)
+                example: null
+              results:
+                type: array
+                items:
+                  $ref: '#/definitions/ActivePromotions'
+          example:
+            count: 3
+            next: null
+            previous: null
+            results:
+              - id: 1
+                code: "SAVE20"
+                description: "20% off on orders above $50"
+                discount_type: "percentage"
+                discount_type_display: "Percentage"
+                discount_value: "20.00"
+                minimum_order_amount: "50.00"
+                maximum_discount: "25.00"
+                valid_until: "2024-12-31T23:59:59Z"
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Promotions
+    parameters: []
+  /promotions/apply/{order_id}/:
+    post:
+      operationId: promotions_apply_create
+      summary: Apply Promo Code to Order
+      description: |
+        Apply a promotional code to an existing order.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        type: integer
+        description: ID of the order to apply promo to
+        example: 1
+      - name: data
+        in: body
+        required: true
+        description: Promo code data
+        schema:
+          type: object
+          required:
+          - promo_code
+          properties:
+            promo_code:
+              type: string
+              description: Promotional code to apply
+              example: "SAVE20"
+        example:
+          promo_code: "SAVE20"
+      responses:
+        '201':
+          description: Promo code applied successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Promo code applied successfully!"
+              order:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  discount_amount:
+                    type: string
+                    format: decimal
+                    example: "5.20"
+                  total_amount:
+                    type: string
+                    format: decimal
+                    example: "28.39"
+              promo_details:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "SAVE20"
+                  discount_type:
+                    type: string
+                    example: "percentage"
+                  discount_value:
+                    type: string
+                    format: decimal
+                    example: "20.00"
+        '400':
+          description: Bad request - validation errors
+        '401':
+          description: Authentication required
+        '403':
+          description: Promo code cannot be applied
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Promo code cannot be applied to this order."
+        '404':
+          description: Order or promo code not found
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Promotions
+    parameters:
+    - name: order_id
+      in: path
+      required: true
+      type: integer
+      description: ID of the order to apply promo to
+      example: 1
+  /promotions/usage/:
+    get:
+      operationId: promotions_usage_list
+      summary: Get Promo Code Usage History
+      description: |
+        Get user's promotional code usage history.
+        
+        **Authentication Required**: Yes (Bearer token)
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: page
+        in: query
+        description: Page number for pagination (default: 1)
+        required: false
+        type: integer
+        minimum: 1
+        example: 1
+      - name: page_size
+        in: query
+        description: Number of items per page (default: 20, max: 100)
+        required: false
+        type: integer
+        minimum: 1
+        maximum: 100
+        example: 20
+      responses:
+        '200':
+          description: Promo usage history retrieved successfully
+          schema:
+            required:
+            - count
+            - results
+            type: object
+            properties:
+              count:
+                type: integer
+                description: Total number of promo usages
+                example: 8
+              next:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for next page (null if no next page)
+                example: null
+              previous:
+                type: string
+                format: uri
+                x-nullable: true
+                description: URL for previous page (null if no previous page)
+                example: null
+              results:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      example: 1
+                    promo_code:
+                      type: string
+                      example: "SAVE20"
+                    order:
+                      type: integer
+                      example: 1
+                    order_number:
+                      type: string
+                      example: "ORD-001"
+                    discount_amount:
+                      type: string
+                      format: decimal
+                      example: "5.20"
+                    used_at:
+                      type: string
+                      format: date-time
+                      example: "2024-01-15T10:30:00Z"
+          example:
+            count: 8
+            next: null
+            previous: null
+            results:
+              - id: 1
+                promo_code: "SAVE20"
+                order: 1
+                order_number: "ORD-001"
+                discount_amount: "5.20"
+                used_at: "2024-01-15T10:30:00Z"
+        '401':
+          description: Authentication required
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Promotions
+    parameters: []
+  /promotions/validate/:
+    post:
+      operationId: promotions_validate_create
+      summary: Validate Promo Code
+      description: |
+        Validate a promotional code for an order.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: data
+        in: body
+        required: true
+        description: Promo code validation data
+        schema:
+          type: object
+          required:
+          - code
+          - order_amount
+          properties:
+            code:
+              type: string
+              description: Promotional code to validate
+              example: "SAVE20"
+            order_amount:
+              type: string
+              format: decimal
+              description: Total order amount
+              example: "75.99"
+        example:
+          code: "SAVE20"
+          order_amount: "75.99"
+      responses:
+        '201':
+          description: Promo code validation successful
+          schema:
+            type: object
+            properties:
+              valid:
+                type: boolean
+                example: true
+              code:
+                type: string
+                example: "SAVE20"
+              description:
+                type: string
+                example: "20% off on orders above $50"
+              discount_type:
+                type: string
+                example: "percentage"
+              discount_value:
+                type: string
+                format: decimal
+                example: "20.00"
+              minimum_order_amount:
+                type: string
+                format: decimal
+                example: "50.00"
+              maximum_discount:
+                type: string
+                format: decimal
+                example: "25.00"
+              discount_amount:
+                type: string
+                format: decimal
+                example: "15.20"
+              valid_until:
+                type: string
+                format: date-time
+                example: "2024-12-31T23:59:59Z"
+        '400':
+          description: Bad request - validation errors
+        '404':
+          description: Promo code not found
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Promo code not found."
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Promotions
+    parameters: []
+  /promotions/{code}/:
+    get:
+      operationId: promotions_read
+      summary: Get Promo Code Details
+      description: |
+        Get details of a specific promotional code.
+        
+        **Authentication Required**: No
+        **Rate Limit**: 100 requests per minute
+      parameters:
+      - name: code
+        in: path
+        required: true
+        type: string
+        description: Promotional code
+        example: "SAVE20"
+      responses:
+        '200':
+          description: Promo code details retrieved successfully
+          schema:
+            $ref: '#/definitions/PromoCode'
+          example:
+            id: 1
+            code: "SAVE20"
+            description: "20% off on orders above $50"
+            discount_type: "percentage"
+            discount_type_display: "Percentage"
+            discount_value: "20.00"
+            minimum_order_amount: "50.00"
+            maximum_discount: "25.00"
+            is_active: true
+            usage_limit: 100
+            current_usage: 45
+            is_valid: true
+            valid_from: "2024-01-01T00:00:00Z"
+            valid_until: "2024-12-31T23:59:59Z"
+            created_at: "2024-01-01T00:00:00Z"
+        '404':
+          description: Promo code not found
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Promo code not found."
+        '429':
+          description: Rate limit exceeded
+      tags:
+      - Promotions
+    parameters:
+    - name: code
+      in: path
+      required: true
+      type: string
+      description: Promotional code
+      example: "SAVE20"
+definitions:
+  Address:
+    required:
+    - full_name
+    - phone
+    - address
+    - city
+    - state
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      full_name:
+        title: Full name
+        type: string
+        maxLength: 200
+        minLength: 1
+      phone:
+        title: Phone
+        type: string
+        maxLength: 15
+        minLength: 1
+      address:
+        title: Address
+        type: string
+        minLength: 1
+      city:
+        title: City
+        type: string
+        maxLength: 100
+        minLength: 1
+      state:
+        title: State
+        type: string
+        maxLength: 100
+        minLength: 1
+      postal_code:
+        title: Postal code
+        type: string
+        maxLength: 20
+        minLength: 1
+      country:
+        title: Country
+        type: string
+        maxLength: 100
+        minLength: 1
+      latitude:
+        title: Latitude
+        type: string
+        format: decimal
+        x-nullable: true
+      longitude:
+        title: Longitude
+        type: string
+        format: decimal
+        x-nullable: true
+      is_default:
+        title: Is default
+        type: boolean
+      address_type:
+        title: Address type
+        type: string
+        enum:
+        - home
+        - work
+        - other
+      full_address:
+        title: Full address
+        type: string
+        readOnly: true
+        minLength: 1
+      coordinates:
+        title: Coordinates
+        type: string
+        readOnly: true
+      created_at:
+        title: Created at
+        type: string
+        format: date-time
+        readOnly: true
+      updated_at:
+        title: Updated at
+        type: string
+        format: date-time
+        readOnly: true
+  AddressCreate:
+    required:
+    - full_name
+    - phone
+    - address
+    - city
+    - state
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      full_name:
+        title: Full name
+        type: string
+        maxLength: 200
+        minLength: 1
+      phone:
+        title: Phone
+        type: string
+        maxLength: 15
+        minLength: 1
+      address:
+        title: Address
+        type: string
+        minLength: 1
+      city:
+        title: City
+        type: string
+        maxLength: 100
+        minLength: 1
+      state:
+        title: State
+        type: string
+        maxLength: 100
+        minLength: 1
+      postal_code:
+        title: Postal code
+        type: string
+        maxLength: 20
+        minLength: 1
+      country:
+        title: Country
+        type: string
+        maxLength: 100
+        minLength: 1
+      latitude:
+        title: Latitude
+        type: string
+        format: decimal
+        x-nullable: true
+      longitude:
+        title: Longitude
+        type: string
+        format: decimal
+        x-nullable: true
+      is_default:
+        title: Is default
+        type: boolean
+      address_type:
+        title: Address type
+        type: string
+        enum:
+        - home
+        - work
+        - other
+      full_address:
+        title: Full address
+        type: string
+        readOnly: true
+        minLength: 1
+      coordinates:
+        title: Coordinates
+        type: string
+        readOnly: true
+  AddressUpdate:
+    required:
+    - phone
+    - address
+    - city
+    - state
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      full_name:
+        title: Full name
+        type: string
+        maxLength: 200
+        minLength: 1
+      phone:
+        title: Phone
+        type: string
+        maxLength: 15
+        minLength: 1
+      address:
+        title: Address
+        type: string
+        minLength: 1
+      city:
+        title: City
+        type: string
+        maxLength: 100
+        minLength: 1
+      state:
+        title: State
+        type: string
+        maxLength: 100
+        minLength: 1
+      postal_code:
+        title: Postal code
+        type: string
+        maxLength: 20
+        minLength: 1
+      country:
+        title: Country
+        type: string
+        maxLength: 100
+        minLength: 1
+      latitude:
+        title: Latitude
+        type: string
+        format: decimal
+        x-nullable: true
+      longitude:
+        title: Longitude
+        type: string
+        format: decimal
+        x-nullable: true
+      is_default:
+        title: Is default
+        type: boolean
+      address_type:
+        title: Address type
+        type: string
+        enum:
+        - home
+        - work
+        - other
+      full_address:
+        title: Full address
+        type: string
+        readOnly: true
+        minLength: 1
+      coordinates:
+        title: Coordinates
+        type: string
+        readOnly: true
+  UserLogin:
+    required:
+    - email_or_username
+    - password
+    type: object
+    properties:
+      email_or_username:
+        title: Email or username
+        type: string
+        minLength: 1
+      password:
+        title: Password
+        type: string
+        minLength: 1
+  PasswordChange:
+    required:
+    - old_password
+    - new_password
+    - new_password_confirm
+    type: object
+    properties:
+      old_password:
+        title: Old password
+        type: string
+        minLength: 1
+      new_password:
+        title: New password
+        type: string
+        minLength: 1
+      new_password_confirm:
+        title: New password confirm
+        type: string
+        minLength: 1
+  PasswordReset:
+    required:
+    - email
+    type: object
+    properties:
+      email:
+        title: Email
+        type: string
+        format: email
+        minLength: 1
+  PasswordResetConfirm:
+    required:
+    - token
+    - new_password
+    - new_password_confirm
+    type: object
+    properties:
+      token:
+        title: Token
+        type: string
+        minLength: 1
+      new_password:
+        title: New password
+        type: string
+        minLength: 1
+      new_password_confirm:
+        title: New password confirm
+        type: string
+        minLength: 1
+  UserProfile:
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      email:
+        title: Email
+        type: string
+        format: email
+        readOnly: true
+        minLength: 1
+      username:
+        title: Username
+        type: string
+        maxLength: 150
+        x-nullable: true
+      first_name:
+        title: First name
+        type: string
+        maxLength: 150
+      last_name:
+        title: Last name
+        type: string
+        maxLength: 150
+      phone:
+        title: Phone
+        type: string
+        maxLength: 15
+        x-nullable: true
+      avatar:
+        title: Avatar
+        type: string
+        readOnly: true
+        x-nullable: true
+        format: uri
+      date_of_birth:
+        title: Date of birth
+        type: string
+        format: date
+        x-nullable: true
+      referral_code:
+        title: Referral code
+        type: string
+        readOnly: true
+        minLength: 1
+      date_joined:
+        title: Date joined
+        type: string
+        format: date-time
+        readOnly: true
+  UserRegistration:
+    required:
+    - email
+    - first_name
+    - last_name
+    - password
+    - password_confirm
+    type: object
+    properties:
+      email:
+        title: Email
+        type: string
+        format: email
+        maxLength: 254
+        minLength: 1
+      username:
+        title: Username
+        type: string
+        maxLength: 150
+        x-nullable: true
+      first_name:
+        title: First name
+        type: string
+        maxLength: 150
+      last_name:
+        title: Last name
+        type: string
+        maxLength: 150
+      phone:
+        title: Phone
+        type: string
+        maxLength: 15
+        x-nullable: true
+      password:
+        title: Password
+        type: string
+        minLength: 1
+      password_confirm:
+        title: Password confirm
+        type: string
+        minLength: 1
+      referral_code:
+        title: Referral code
+        type: string
+      date_of_birth:
+        title: Date of birth
+        type: string
+        format: date
+        x-nullable: true
+  SocialLogin:
+    required:
+    - provider
+    - access_token
+    - provider_user_id
+    - email
+    type: object
+    properties:
+      provider:
+        title: Provider
+        type: string
+        enum:
+        - google
+        - facebook
+        - apple
+      access_token:
+        title: Access token
+        type: string
+        minLength: 1
+      provider_user_id:
+        title: Provider user id
+        type: string
+        minLength: 1
+      email:
+        title: Email
+        type: string
+        format: email
+        minLength: 1
+      first_name:
+        title: First name
+        type: string
+        minLength: 1
+      last_name:
+        title: Last name
+        type: string
+        minLength: 1
+      avatar_url:
+        title: Avatar url
+        type: string
+        format: uri
+        minLength: 1
+  UserPoints:
+    type: object
+    properties:
+      balance:
+        title: Balance
+        type: integer
+        readOnly: true
+      total_earned:
+        title: Total earned
+        type: integer
+        readOnly: true
+      total_spent:
+        title: Total spent
+        type: integer
+        readOnly: true
+      created_at:
+        title: Created at
+        type: string
+        format: date-time
+        readOnly: true
+      updated_at:
+        title: Updated at
+        type: string
+        format: date-time
+        readOnly: true
+  PointsTransaction:
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      amount:
+        title: Amount
+        type: integer
+        readOnly: true
+      transaction_type:
+        title: Transaction type
+        type: string
+        enum:
+        - earned
+        - spent
+        - expired
+        - bonus
+        - referral
+        - birthday
+        - first_order
+        - physical_visit
+        readOnly: true
+      transaction_type_display:
+        title: Transaction type display
+        type: string
+        readOnly: true
+        minLength: 1
+      reason:
+        title: Reason
+        type: string
+        readOnly: true
+        minLength: 1
+      balance_after:
+        title: Balance after
+        type: integer
+        readOnly: true
+      order:
+        title: Order
+        type: integer
+        readOnly: true
+        x-nullable: true
+      created_at:
+        title: Created at
+        type: string
+        format: date-time
+        readOnly: true
+  Reward:
+    required:
+    - name
+    - description
+    - reward_type
+    - points_required
+    - valid_from
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      name:
+        title: Name
+        type: string
+        maxLength: 200
+        minLength: 1
+      description:
+        title: Description
+        type: string
+        minLength: 1
+      reward_type:
+        title: Reward type
+        type: string
+        enum:
+        - discount
+        - free_item
+        - free_delivery
+        - cashback
+      reward_type_display:
+        title: Reward type display
+        type: string
+        readOnly: true
+        minLength: 1
+      points_required:
+        title: Points required
+        type: integer
+      discount_percentage:
+        title: Discount percentage
+        type: string
+        format: decimal
+        x-nullable: true
+      discount_amount:
+        title: Discount amount
+        type: string
+        format: decimal
+        x-nullable: true
+      free_item:
+        title: Free item
+        type: integer
+        x-nullable: true
+      is_active:
+        title: Is active
+        type: boolean
+      is_available:
+        title: Is available
+        type: boolean
+        readOnly: true
+      can_redeem:
+        title: Can redeem
+        type: string
+        readOnly: true
+      valid_from:
+        title: Valid from
+        type: string
+        format: date-time
+      valid_until:
+        title: Valid until
+        type: string
+        format: date-time
+        x-nullable: true
+  UserReward:
+    required:
+    - reward
+    - points_spent
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      reward:
+        title: Reward
+        type: integer
+      reward_name:
+        title: Reward name
+        type: string
+        readOnly: true
+        minLength: 1
+      reward_description:
+        title: Reward description
+        type: string
+        readOnly: true
+        minLength: 1
+      reward_type:
+        title: Reward type
+        type: string
+        readOnly: true
+        minLength: 1
+      discount_percentage:
+        title: Discount percentage
+        type: string
+        format: decimal
+        x-nullable: true
+        readOnly: true
+      discount_amount:
+        title: Discount amount
+        type: string
+        format: decimal
+        x-nullable: true
+        readOnly: true
+      free_item:
+        title: Free item ID
+        type: integer
+        x-nullable: true
+        readOnly: true
+      free_item_price:
+        title: Free item price
+        type: string
+        format: decimal
+        x-nullable: true
+        readOnly: true
+      points_spent:
+        title: Points spent
+        type: integer
+      status:
+        title: Status
+        type: string
+        enum:
+        - active
+        - used
+        - expired
+        readOnly: true
+      status_display:
+        title: Status display
+        type: string
+        readOnly: true
+        minLength: 1
+      redeemed_at:
+        title: Redeemed at
+        type: string
+        format: date-time
+        readOnly: true
+      used_at:
+        title: Used at
+        type: string
+        format: date-time
+        readOnly: true
+        x-nullable: true
+      expires_at:
+        title: Expires at
+        type: string
+        format: date-time
+        description: "Expiration date (default: 30 days from redemption)"
+        x-nullable: true
+      order:
+        title: Order
+        type: integer
+        readOnly: true
+        x-nullable: true
+  LoyaltyCard:
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      qr_code:
+        title: QR Code
+        type: string
+        example: "LOYALTY-ABC123DEF456"
+      is_active:
+        title: Is Active
+        type: boolean
+      created_at:
+        title: Created At
+        type: string
+        format: date-time
+        readOnly: true
+      last_scan:
+        title: Last Scan
+        type: string
+        format: date-time
+        x-nullable: true
+      user_email:
+        title: User Email
+        type: string
+        format: email
+        readOnly: true
+      user_name:
+        title: User Name
+        type: string
+        readOnly: true
+      loyalty_tier:
+        title: Loyalty Tier
+        type: string
+        enum: [bronze, silver, gold, platinum]
+      tier_benefits:
+        title: Tier Benefits
+        type: object
+        properties:
+          name:
+            type: string
+          points_multiplier:
+            type: number
+            format: float
+          free_delivery_threshold:
+            type: number
+            format: float
+          special_offers:
+            type: boolean
+      points_balance:
+        title: Points Balance
+        type: integer
+      points_total_earned:
+        title: Total Points Earned
+        type: integer
+  QRCodeScan:
+    required:
+    - qr_code
+    type: object
+    properties:
+      qr_code:
+        title: Qr code
+        type: string
+        maxLength: 255
+        minLength: 1
+      visit_amount:
+        title: Visit amount
+        type: string
+        format: decimal
+        x-nullable: true
+      visit_type:
+        title: Visit type
+        type: string
+        enum:
+        - general
+        - lunch
+        - dinner
+        - happy_hour
+        default: general
+  Category:
+    required:
+    - name
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      name:
+        title: Name
+        type: string
+        maxLength: 100
+        minLength: 1
+      description:
+        title: Description
+        type: string
+      image:
+        title: Image
+        type: string
+        readOnly: true
+        x-nullable: true
+        format: uri
+      is_active:
+        title: Is active
+        type: boolean
+      sort_order:
+        title: Sort order
+        type: integer
+      menu_items_count:
+        title: Menu items count
+        type: string
+        readOnly: true
+  FeaturedItems:
+    required:
+    - name
+    - description
+    - price
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      name:
+        title: Name
+        type: string
+        maxLength: 200
+        minLength: 1
+      description:
+        title: Description
+        type: string
+        minLength: 1
+      price:
+        title: Price
+        type: string
+        format: decimal
+      formatted_price:
+        title: Formatted price
+        type: string
+        readOnly: true
+        minLength: 1
+      category_name:
+        title: Category name
+        type: string
+        readOnly: true
+        minLength: 1
+      image:
+        title: Image
+        type: string
+        readOnly: true
+        x-nullable: true
+        format: uri
+      badges:
+        title: Badges
+        type: object
+      badges_display:
+        title: Badges display
+        type: string
+        readOnly: true
+      is_available:
+        title: Is available
+        type: boolean
+      preparation_time:
+        title: Preparation time
+        description: Preparation time in minutes
+        type: integer
+  MenuItem:
+    required:
+    - name
+    - description
+    - price
+    - category
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      name:
+        title: Name
+        type: string
+        maxLength: 200
+        minLength: 1
+      description:
+        title: Description
+        type: string
+        minLength: 1
+      price:
+        title: Price
+        type: string
+        format: decimal
+      formatted_price:
+        title: Formatted price
+        type: string
+        readOnly: true
+        minLength: 1
+      category:
+        title: Category
+        type: integer
+      category_name:
+        title: Category name
+        type: string
+        readOnly: true
+        minLength: 1
+      category_id:
+        title: Category id
+        type: integer
+        readOnly: true
+      image:
+        title: Image
+        type: string
+        readOnly: true
+        x-nullable: true
+        format: uri
+      badges:
+        title: Badges
+        type: object
+      badges_display:
+        title: Badges display
+        type: string
+        readOnly: true
+      allergens:
+        title: Allergens
+        type: object
+      nutritional_info:
+        title: Nutritional info
+        type: object
+      is_available:
+        title: Is available
+        type: boolean
+      is_featured:
+        title: Is featured
+        type: boolean
+      preparation_time:
+        title: Preparation time
+        description: Preparation time in minutes
+        type: integer
+      sort_order:
+        title: Sort order
+        type: integer
+  MenuItemDetail:
+    required:
+    - name
+    - description
+    - price
+    - category
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      name:
+        title: Name
+        type: string
+        maxLength: 200
+        minLength: 1
+      description:
+        title: Description
+        type: string
+        minLength: 1
+      price:
+        title: Price
+        type: string
+        format: decimal
+      formatted_price:
+        title: Formatted price
+        type: string
+        readOnly: true
+        minLength: 1
+      category:
+        title: Category
+        type: integer
+      category_name:
+        title: Category name
+        type: string
+        readOnly: true
+        minLength: 1
+      category_id:
+        title: Category id
+        type: integer
+        readOnly: true
+      image:
+        title: Image
+        type: string
+        readOnly: true
+        x-nullable: true
+        format: uri
+      badges:
+        title: Badges
+        type: object
+      badges_display:
+        title: Badges display
+        type: string
+        readOnly: true
+      allergens:
+        title: Allergens
+        type: object
+      nutritional_info:
+        title: Nutritional info
+        type: object
+      is_available:
+        title: Is available
+        type: boolean
+      is_featured:
+        title: Is featured
+        type: boolean
+      preparation_time:
+        title: Preparation time
+        description: Preparation time in minutes
+        type: integer
+      sort_order:
+        title: Sort order
+        type: integer
+      created_at:
+        title: Created at
+        type: string
+        format: date-time
+        readOnly: true
+      updated_at:
+        title: Updated at
+        type: string
+        format: date-time
+        readOnly: true
+  OrderList:
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      order_number:
+        title: Order number
+        type: string
+        readOnly: true
+        minLength: 1
+      customer_name:
+        title: Customer name
+        type: string
+        readOnly: true
+        minLength: 1
+      delivery_type:
+        title: Delivery type
+        type: string
+        enum:
+        - delivery
+        - pickup
+      status:
+        title: Status
+        type: string
+        enum:
+        - pending
+        - confirmed
+        - preparing
+        - ready
+        - out_for_delivery
+        - delivered
+        - cancelled
+        - refunded
+        readOnly: true
+      payment_status:
+        title: Payment status
+        type: string
+        enum:
+        - pending
+        - paid
+        - failed
+        - refunded
+        readOnly: true
+      total_amount:
+        title: Total amount
+        type: string
+        format: decimal
+        readOnly: true
+      created_at:
+        title: Created at
+        type: string
+        format: date-time
+        readOnly: true
+      items_count:
+        title: Items count
+        type: string
+        readOnly: true
+  OrderItem:
+    required:
+    - menu_item
+    - quantity
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      menu_item:
+        title: Menu item
+        type: integer
+      item_name:
+        title: Item name
+        type: string
+        readOnly: true
+        minLength: 1
+      item_description:
+        title: Item description
+        type: string
+        readOnly: true
+        minLength: 1
+      item_image:
+        title: Item image
+        type: string
+        readOnly: true
+        minLength: 1
+      quantity:
+        title: Quantity
+        type: integer
+        minimum: 1
+      unit_price:
+        title: Unit price
+        type: string
+        format: decimal
+        readOnly: true
+      total_price:
+        title: Total price
+        type: string
+        format: decimal
+        readOnly: true
+      special_instructions:
+        title: Special instructions
+        type: string
+  Order:
+    required:
+    - items
+    - customer_name
+    - customer_email
+    - customer_phone
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      order_number:
+        title: Order number
+        type: string
+        readOnly: true
+        minLength: 1
+      user:
+        title: User
+        type: integer
+        x-nullable: true
+        description: User ID for authenticated users, null for guest users
+      guest_email:
+        title: Guest email
+        type: string
+        format: email
+        maxLength: 254
+        x-nullable: true
+        description: Guest email (for guest orders or when user provides different email)
+      guest_name:
+        title: Guest name
+        type: string
+        maxLength: 200
+        x-nullable: true
+        description: Guest name (for guest orders or when user provides different name)
+      guest_phone:
+        title: Guest phone
+        type: string
+        maxLength: 15
+        x-nullable: true
+        description: Guest phone (for guest orders or when user provides different phone)
+      customer_name:
+        title: Customer name
+        type: string
+        maxLength: 200
+        minLength: 1
+        description: Customer's full name (mandatory for all orders)
+      customer_email:
+        title: Customer email
+        type: string
+        format: email
+        minLength: 1
+        description: Customer's email address (mandatory for all orders)
+      customer_phone:
+        title: Customer phone
+        type: string
+        maxLength: 15
+        minLength: 1
+        description: Customer's phone number (mandatory for all orders)
+      delivery_address:
+        title: Delivery address
+        type: integer
+        x-nullable: true
+        description: Delivery address ID (required for delivery orders)
+      delivery_type:
+        title: Delivery type
+        type: string
+        enum:
+        - delivery
+        - pickup
+        description: Type of delivery (delivery requires address)
+      special_instructions:
+        title: Special instructions
+        type: string
+        description: General special instructions for the order
+      subtotal:
+        title: Subtotal
+        type: string
+        format: decimal
+        description: Order subtotal before tax and fees
+      tax_amount:
+        title: Tax amount
+        type: string
+        format: decimal
+        description: Tax amount calculated on subtotal
+      delivery_fee:
+        title: Delivery fee
+        type: string
+        format: decimal
+        description: Delivery fee (0 for pickup orders)
+      discount_amount:
+        title: Discount amount
+        type: string
+        format: decimal
+        description: Discount amount from promotions or rewards
+      total_amount:
+        title: Total amount
+        type: string
+        format: decimal
+        description: Final total amount (minimum ₦500.00)
+      status:
+        title: Status
+        type: string
+        enum:
+        - pending
+        - confirmed
+        - preparing
+        - ready
+        - out_for_delivery
+        - delivered
+        - cancelled
+        - refunded
+        readOnly: true
+      payment_status:
+        title: Payment status
+        type: string
+        enum:
+        - pending
+        - paid
+        - failed
+        - refunded
+        readOnly: true
+      estimated_delivery_time:
+        title: Estimated delivery time
+        type: string
+        format: date-time
+        readOnly: true
+        x-nullable: true
+      actual_delivery_time:
+        title: Actual delivery time
+        type: string
+        format: date-time
+        readOnly: true
+        x-nullable: true
+      created_at:
+        title: Created at
+        type: string
+        format: date-time
+        readOnly: true
+      updated_at:
+        title: Updated at
+        type: string
+        format: date-time
+        readOnly: true
+      items:
+        type: array
+        items:
+          $ref: '#/definitions/OrderItem'
+        description: Order items (mandatory, at least one item required)
+  OrderDetail:
+    required:
+    - items
+    - customer_name
+    - customer_email
+    - customer_phone
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      order_number:
+        title: Order number
+        type: string
+        readOnly: true
+        minLength: 1
+      user:
+        title: User
+        type: integer
+        x-nullable: true
+        description: User ID for authenticated users, null for guest users
+      guest_email:
+        title: Guest email
+        type: string
+        format: email
+        maxLength: 254
+        x-nullable: true
+        description: Guest email (for guest orders or when user provides different email)
+      guest_name:
+        title: Guest name
+        type: string
+        maxLength: 200
+        x-nullable: true
+        description: Guest name (for guest orders or when user provides different name)
+      guest_phone:
+        title: Guest phone
+        type: string
+        maxLength: 15
+        x-nullable: true
+        description: Guest phone (for guest orders or when user provides different phone)
+      customer_name:
+        title: Customer name
+        type: string
+        maxLength: 200
+        minLength: 1
+        description: Customer's full name (mandatory for all orders)
+      customer_email:
+        title: Customer email
+        type: string
+        format: email
+        minLength: 1
+        description: Customer's email address (mandatory for all orders)
+      customer_phone:
+        title: Customer phone
+        type: string
+        maxLength: 15
+        minLength: 1
+        description: Customer's phone number (mandatory for all orders)
+      delivery_address:
+        title: Delivery address
+        type: string
+        maxLength: 500
+        x-nullable: true
+        description: Delivery address as text (required for delivery orders)
+      delivery_type:
+        title: Delivery type
+        type: string
+        enum:
+        - delivery
+        - pickup
+        description: Type of delivery (delivery requires address)
+      special_instructions:
+        title: Special instructions
+        type: string
+        description: General special instructions for the order
+      subtotal:
+        title: Subtotal
+        type: string
+        format: decimal
+        description: Order subtotal before tax and fees
+      tax_amount:
+        title: Tax amount
+        type: string
+        format: decimal
+        description: Tax amount calculated on subtotal
+      delivery_fee:
+        title: Delivery fee
+        type: string
+        format: decimal
+        description: Delivery fee (0 for pickup orders)
+      discount_amount:
+        title: Discount amount
+        type: string
+        format: decimal
+        description: Discount amount from promotions or rewards
+      total_amount:
+        title: Total amount
+        type: string
+        format: decimal
+        description: Final total amount (minimum ₦500.00)
+      status:
+        title: Status
+        type: string
+        enum:
+        - pending
+        - confirmed
+        - preparing
+        - ready
+        - out_for_delivery
+        - delivered
+        - cancelled
+        - refunded
+        readOnly: true
+      payment_status:
+        title: Payment status
+        type: string
+        enum:
+        - pending
+        - paid
+        - failed
+        - refunded
+        readOnly: true
+      estimated_delivery_time:
+        title: Estimated delivery time
+        type: string
+        format: date-time
+        readOnly: true
+        x-nullable: true
+      actual_delivery_time:
+        title: Actual delivery time
+        type: string
+        format: date-time
+        readOnly: true
+        x-nullable: true
+      created_at:
+        title: Created at
+        type: string
+        format: date-time
+        readOnly: true
+      updated_at:
+        title: Updated at
+        type: string
+        format: date-time
+        readOnly: true
+      items:
+        type: array
+        items:
+          $ref: '#/definitions/OrderItem'
+        description: Order items (mandatory, at least one item required)
+  PromoCode:
+    required:
+    - code
+    - description
+    - discount_type
+    - discount_value
+    - valid_from
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      code:
+        title: Code
+        type: string
+        maxLength: 20
+        minLength: 1
+      description:
+        title: Description
+        type: string
+        minLength: 1
+      discount_type:
+        title: Discount type
+        type: string
+        enum:
+        - percentage
+        - fixed
+      discount_type_display:
+        title: Discount type display
+        type: string
+        readOnly: true
+        minLength: 1
+      discount_value:
+        title: Discount value
+        type: string
+        format: decimal
+      minimum_order_amount:
+        title: Minimum order amount
+        type: string
+        format: decimal
+      maximum_discount:
+        title: Maximum discount
+        type: string
+        format: decimal
+        x-nullable: true
+      is_active:
+        title: Is active
+        type: boolean
+      usage_limit:
+        title: Usage limit
+        description: 0 for unlimited
+        type: integer
+      current_usage:
+        title: Current usage
+        type: integer
+        readOnly: true
+      is_valid:
+        title: Is valid
+        type: boolean
+        readOnly: true
+      valid_from:
+        title: Valid from
+        type: string
+        format: date-time
+      valid_until:
+        title: Valid until
+        type: string
+        format: date-time
+        x-nullable: true
+      created_at:
+        title: Created at
+        type: string
+        format: date-time
+        readOnly: true
+  ActivePromotions:
+    required:
+    - code
+    - description
+    - discount_type
+    - discount_value
+    type: object
+    properties:
+      id:
+        title: ID
+        type: integer
+        readOnly: true
+      code:
+        title: Code
+        type: string
+        maxLength: 20
+        minLength: 1
+      description:
+        title: Description
+        type: string
+        minLength: 1
+      discount_type:
+        title: Discount type
+        type: string
+        enum:
+        - percentage
+        - fixed
+      discount_type_display:
+        title: Discount type display
+        type: string
+        readOnly: true
+        minLength: 1
+      discount_value:
+        title: Discount value
+        type: string
+        format: decimal
+      minimum_order_amount:
+        title: Minimum order amount
+        type: string
+        format: decimal
+      maximum_discount:
+        title: Maximum discount
+        type: string
+        format: decimal
+        x-nullable: true
+      valid_until:
+        title: Valid until
+        type: string
+        format: date-time
+        x-nullable: true
+  RestaurantSettings:
+    type: object
+    properties:
+      name:
+        title: Name
+        type: string
+        maxLength: 200
+        minLength: 1
+      description:
+        title: Description
+        type: string
+        minLength: 1
+      tagline:
+        title: Tagline
+        type: string
+        maxLength: 200
+        minLength: 1
+      address:
+        title: Address
+        type: string
+        maxLength: 200
+        minLength: 1
+      phone:
+        title: Phone
+        type: string
+        maxLength: 15
+        minLength: 1
+      email:
+        title: Email
+        type: string
+        format: email
+        maxLength: 254
+        minLength: 1
+      website:
+        title: Website
+        type: string
+        format: uri
+        maxLength: 200
+        minLength: 1
+      opening_hours:
+        title: Opening hours
+        type: object
+        properties:
+          monday:
+            title: Monday
+            type: string
+            format: time
+            x-nullable: true
+          tuesday:
+            title: Tuesday
+            type: string
+            format: time
+            x-nullable: true
+          wednesday:
+            title: Wednesday
+            type: string
+            format: time
+            x-nullable: true
+          thursday:
+            title: Thursday
+            type: string
+            format: time
+            x-nullable: true
+          friday:
+            title: Friday
+            type: string
+            format: time
+            x-nullable: true
+          saturday:
+            title: Saturday
+            type: string
+            format: time
+            x-nullable: true
+          sunday:
+            title: Sunday
+            type: string
+            format: time
+            x-nullable: true
+      opening_time:
+        title: Opening time
+        type: string
+        format: time
+        x-nullable: true
+      closing_time:
+        title: Closing time
+        type: string
+        format: time
+        x-nullable: true
+      is_open:
+        title: Is open
+        type: boolean
+      facebook_url:
+        title: Facebook URL
+        type: string
+        format: uri
+        maxLength: 200
+        minLength: 1
+        x-nullable: true
+      instagram_url:
+        title: Instagram URL
+        type: string
+        format: uri
+        maxLength: 200
+        minLength: 1
+        x-nullable: true
+      twitter_url:
+        title: Twitter URL
+        type: string
+        format: uri
+        maxLength: 200
+        minLength: 1
+        x-nullable: true
+      logo:
+        title: Logo
+        type: string
+        format: uri
+        maxLength: 200
+        minLength: 1
+        x-nullable: true
+      favicon:
+        title: Favicon
+        type: string
+        format: uri
+        maxLength: 200
+        minLength: 1
+        x-nullable: true
+      delivery_radius:
+        title: Delivery radius
+        type: string
+        format: decimal
+        x-nullable: true
+      minimum_order:
+        title: Minimum order
+        type: string
+        format: decimal
+        x-nullable: true
+      free_delivery_threshold:
+        title: Free delivery threshold
+        type: string
+        format: decimal
+        x-nullable: true
+      vat_rate:
+        title: VAT rate
+        type: string
+        format: decimal
+        x-nullable: true
+      pickup_delivery_fee:
+        title: Pickup delivery fee
+        type: string
+        format: decimal
+        x-nullable: true
+      delivery_fee_base:
+        title: Delivery fee base
+        type: string
+        format: decimal
+        x-nullable: true
+      delivery_fee_per_km:
+        title: Delivery fee per km
+        type: string
+        format: decimal
+        x-nullable: true
+      accepts_cash:
+        title: Accepts cash
+        type: boolean
+      accepts_card:
+        title: Accepts card
+        type: boolean
+      accepts_mobile_money:
+        title: Accepts mobile money
+        type: boolean
+  PublicRestaurantSettings:
+    type: object
+    properties:
+      name:
+        title: Name
+        type: string
+        maxLength: 200
+        minLength: 1
+      description:
+        title: Description
+        type: string
+        minLength: 1
+      tagline:
+        title: Tagline
+        type: string
+        maxLength: 200
+        minLength: 1
+      address:
+        title: Address
+        type: string
+        maxLength: 200
+        minLength: 1
+      phone:
+        title: Phone
+        type: string
+        maxLength: 15
+        minLength: 1
+      email:
+        title: Email
+        type: string
+        format: email
+        maxLength: 254
+        minLength: 1
+      website:
+        title: Website
+        type: string
+        format: uri
+        maxLength: 200
+        minLength: 1
+      opening_hours:
+        title: Opening hours
+        type: object
+        properties:
+          monday:
+            title: Monday
+            type: string
+            format: time
+            x-nullable: true
+          tuesday:
+            title: Tuesday
+            type: string
+            format: time
+            x-nullable: true
+          wednesday:
+            title: Wednesday
+            type: string
+            format: time
+            x-nullable: true
+          thursday:
+            title: Thursday
+            type: string
+            format: time
+            x-nullable: true
+          friday:
+            title: Friday
+            type: string
+            format: time
+            x-nullable: true
+          saturday:
+            title: Saturday
+            type: string
+            format: time
+            x-nullable: true
+          sunday:
+            title: Sunday
+            type: string
+            format: time
+            x-nullable: true
+      opening_time:
+        title: Opening time
+        type: string
+        format: time
+        x-nullable: true
+      closing_time:
+        title: Closing time
+        type: string
+        format: time
+        x-nullable: true
+      is_open:
+        title: Is open
+        type: boolean
+      facebook_url:
+        title: Facebook URL
+        type: string
+        format: uri
+        maxLength: 200
+        minLength: 1
+        x-nullable: true
+      instagram_url:
+        title: Instagram URL
+        type: string
+        format: uri
+        maxLength: 200
+        minLength: 1
+        x-nullable: true
+      twitter_url:
+        title: Twitter URL
+        type: string
+        format: uri
+        maxLength: 200
+        minLength: 1
+        x-nullable: true
+      logo:
+        title: Logo
+        type: string
+        format: uri
+        maxLength: 200
+        minLength: 1
+        x-nullable: true
+      favicon:
+        title: Favicon
+        type: string
+        format: uri
+        maxLength: 200
+        minLength: 1
+        x-nullable: true
+      delivery_radius:
+        title: Delivery radius
+        type: string
+        format: decimal
+        x-nullable: true
+      minimum_order:
+        title: Minimum order
+        type: string
+        format: decimal
+        x-nullable: true
+      free_delivery_threshold:
+        title: Free delivery threshold
+        type: string
+        format: decimal
+        x-nullable: true
+      vat_rate:
+        title: VAT rate
+        type: string
+        format: decimal
+        x-nullable: true
+      pickup_delivery_fee:
+        title: Pickup delivery fee
+        type: string
+        format: decimal
+        x-nullable: true
+      delivery_fee_base:
+        title: Delivery fee base
+        type: string
+        format: decimal
+        x-nullable: true
+      delivery_fee_per_km:
+        title: Delivery fee per km
+        type: string
+        format: decimal
+        x-nullable: true
+      accepts_cash:
+        title: Accepts cash
+        type: boolean
+      accepts_card:
+        title: Accepts card
+        type: boolean
+      accepts_mobile_money:
+        title: Accepts mobile money
+        type: boolean

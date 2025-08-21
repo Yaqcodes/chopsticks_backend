@@ -1,0 +1,54 @@
+{% extends "admin/index.html" %}
+{% load i18n %}
+
+{% block content %}
+    <!-- QR Scan Quick Actions Section -->
+    <div class="module" style="margin-bottom: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h2 style="color: #dc3545; border-bottom: 2px solid #dc3545; padding: 15px 20px 10px 20px; margin: 0; font-size: 18px;">
+            🍜 QR Code Scanner Quick Actions
+        </h2>
+        <div style="padding: 20px;">
+            <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                <a href="{% url 'loyalty:qr_scan_interface' %}" class="button" style="
+                    background: #dc3545; 
+                    color: white; 
+                    padding: 12px 24px; 
+                    text-decoration: none; 
+                    border-radius: 6px; 
+                    font-weight: bold;
+                    display: inline-block;
+                    transition: all 0.3s ease;
+                    border: none;
+                    cursor: pointer;
+                    font-size: 14px;
+                " onmouseover="this.style.background='#8b0000'; this.style.transform='translateY(-2px)'" 
+                   onmouseout="this.style.background='#dc3545'; this.style.transform='translateY(0)'">
+                    📱 QR Scan Interface
+                </a>
+                <a href="{% url 'loyalty:qr_scan_dashboard' %}" class="button" style="
+                    background: #343a40; 
+                    color: white; 
+                    padding: 12px 24px; 
+                    text-decoration: none; 
+                    border-radius: 6px; 
+                    font-weight: bold;
+                    display: inline-block;
+                    transition: all 0.3s ease;
+                    border: none;
+                    cursor: pointer;
+                    font-size: 14px;
+                " onmouseover="this.style.background='#495057'; this.style.transform='translateY(-2px)'" 
+                   onmouseout="this.style.background='#343a40'; this.style.transform='translateY(0)'">
+                    📊 QR Scan Dashboard
+                </a>
+            </div>
+            <p style="margin: 0; color: #6c757d; font-size: 13px; line-height: 1.4;">
+                <strong>Quick Access:</strong> Use these buttons to quickly navigate to the QR code scanning tools for loyalty card management. 
+                The QR Scan Interface allows staff to scan customer loyalty cards, while the Dashboard provides an overview of recent scans and statistics.
+            </p>
+        </div>
+    </div>
+
+    <!-- Original admin content -->
+    {{ block.super }}
+{% endblock %}

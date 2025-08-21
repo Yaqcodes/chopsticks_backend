@@ -1,0 +1,1213 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Scanner - Chopsticks & Bowls</title>
+    <style>
+        :root {
+            --primary-color: #dc3545;
+            --primary-dark: #8b0000;
+            --secondary-color: #343a40;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --warning-color: #ffc107;
+            --light-color: #f8f9fa;
+            --dark-color: #343a40;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+
+        .scan-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .scan-card h2 {
+            color: var(--secondary-color);
+            margin-bottom: 20px;
+            font-size: 24px;
+            text-align: center;
+        }
+
+        .qr-input-section {
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: var(--secondary-color);
+        }
+
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+        }
+
+        .input-group input:disabled {
+            background-color: #f8f9fa;
+            color: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .scan-button {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+
+        .scan-button:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .scan-button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .result-section {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .result-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .result-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .result-info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+
+        .result-content {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .result-icon {
+            font-size: 24px;
+        }
+
+        .result-text h3 {
+            margin-bottom: 5px;
+            font-size: 18px;
+        }
+
+        .result-text p {
+            margin-bottom: 3px;
+            font-size: 14px;
+        }
+
+        .points-display {
+            background: var(--primary-color);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        .points-number {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .points-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .recent-scans {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .recent-scans h3 {
+            color: var(--secondary-color);
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+
+        .scan-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .scan-item:last-child {
+            border-bottom: none;
+        }
+
+        .scan-info h4 {
+            color: var(--secondary-color);
+            margin-bottom: 5px;
+        }
+
+        .scan-info p {
+            color: #6c757d;
+            font-size: 14px;
+        }
+
+        .scan-points {
+            background: var(--success-color);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .back-button {
+            background: var(--secondary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 20px;
+            transition: background 0.3s ease;
+        }
+
+        .back-button:hover {
+            background: #495057;
+            color: white;
+            text-decoration: none;
+        }
+
+        /* Camera Scanner Styles */
+        .camera-section {
+            margin-bottom: 30px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #000;
+        }
+
+        #qr-reader {
+            width: 100%;
+            min-height: 400px;
+        }
+
+        #qr-reader__scan_region {
+            background: #000;
+        }
+
+        #qr-reader__scan_region > img {
+            display: none;
+        }
+
+        #qr-reader__camera_selection {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            margin: 10px;
+        }
+
+        #qr-reader__status_span {
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+
+        .scan-instructions {
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .scan-instructions p {
+            margin: 5px 0;
+        }
+
+        .camera-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .camera-button {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .camera-button:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .scan-options {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .scan-button.secondary {
+            background: var(--secondary-color);
+        }
+
+        .scan-button.secondary:hover {
+            background: #495057;
+        }
+
+        .camera-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .camera-status {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        /* Modal Styles */
+        .scan-options-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            position: relative;
+        }
+
+        .modal-content h3 {
+            color: var(--secondary-color);
+            margin-bottom: 20px;
+            font-size: 22px;
+        }
+
+        .scan-method-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .scan-method-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .scan-method-btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        .modal-close-btn {
+            background: var(--secondary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .modal-close-btn:hover {
+            background: #495057;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 15px;
+                margin: 20px auto;
+            }
+
+            .scan-card, .recent-scans {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🍜 Chopsticks & Bowls</h1>
+        <p>QR Code Loyalty Scanner</p>
+    </div>
+
+    <div class="container">
+        <a href="/admin-qr/qr-scan-dashboard/" class="back-button">← Back to QR Dashboard</a>
+
+        <div class="scan-card">
+            <h2>Scan Loyalty Card</h2>
+            
+            <!-- QR Scanner Section -->
+            <div class="camera-section" id="camera-section" style="display: none;">
+                <div class="camera-container">
+                    <div id="qr-reader"></div>
+                    <div class="scan-instructions">
+                        <p>Position the loyalty card QR code within the scanning area</p>
+                        <p>Supports: Google Apps Script URLs (customerID=) or LOYALTY- codes</p>
+                    </div>
+                </div>
+                <div class="camera-controls">
+                    <button class="camera-button" onclick="toggleCamera()">
+                        ⏹️ Stop Scanner
+                    </button>
+                </div>
+                <div id="camera-status" class="camera-status" style="display: none;"></div>
+                <div id="camera-error" class="camera-error" style="display: none;"></div>
+            </div>
+
+            <!-- Manual Input Section -->
+            <div class="qr-input-section">
+                <div class="input-group">
+                    <label for="qr-code">QR Code:</label>
+                    <input type="text" id="qr-code" placeholder="QR code will be populated after scanning..." autocomplete="off" disabled>
+                </div>
+
+                <div class="input-group">
+                    <label for="visit-amount">Visit Amount (₦):</label>
+                    <input type="number" id="visit-amount" placeholder="0" step="1" min="0">
+                </div>
+
+                <div class="scan-options">
+                    <button class="scan-button" id="scan-btn" onclick="showScanOptions()">
+                        <span id="scan-text">Scan QR Code</span>
+                        <span id="scan-loading" class="loading" style="display: none;"></span>
+                    </button>
+                    <button class="scan-button secondary" id="submit-btn" onclick="submitForm()" style="display: none;">
+                        📤 Submit
+                    </button>
+                </div>
+
+                <!-- Scan Options Modal -->
+                <div id="scan-options-modal" class="scan-options-modal" style="display: none;">
+                    <div class="modal-content">
+                        <h3>Choose Scan Method</h3>
+                        <div class="scan-method-buttons">
+                            <button class="scan-method-btn" onclick="startCameraScan()">
+                                📷 Use Camera
+                            </button>
+                            <button class="scan-method-btn" onclick="uploadQRFile()">
+                                📁 Upload QR Code
+                            </button>
+                        </div>
+                        <button class="modal-close-btn" onclick="hideScanOptions()">✕</button>
+                    </div>
+                </div>
+
+                <!-- Hidden file input for QR code upload -->
+                <input type="file" id="qr-file-input" accept="image/*" style="display: none;" onchange="handleFileUpload(event)">
+            </div>
+
+            <div class="result-section" id="result-section">
+                <div class="result-content">
+                    <div class="result-icon" id="result-icon"></div>
+                    <div class="result-text">
+                        <h3 id="result-title"></h3>
+                        <p id="result-message"></p>
+                    </div>
+                </div>
+                <div class="points-display" id="points-display" style="display: none;">
+                    <div class="points-number" id="points-number"></div>
+                    <div class="points-label" id="points-label"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="recent-scans">
+            <h3>Recent Scans</h3>
+            <div id="recent-scans-list">
+                <p style="text-align: center; color: #6c757d;">Loading recent scans...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="{% static 'js/html5-qrcode.min.js' %}"></script>
+    <script src="{% static 'js/jsqr.min.js' %}"></script>
+    <script>
+        // QR Scanner variables
+        let html5QrcodeScanner = null;
+        let isScanning = false;
+        let currentStream = null;
+        let fallbackScanner = null;
+        let lastScannedCode = null;
+        let scanCooldown = false;
+
+        // Load recent scans on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadRecentScans();
+        });
+
+        // Handle Enter key in QR code input
+        document.getElementById('qr-code').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                scanQRCode();
+            }
+        });
+
+        // QR Scanner Functions
+        function toggleCamera() {
+            const cameraSection = document.getElementById('camera-section');
+            const qrInputSection = document.querySelector('.qr-input-section');
+            
+            console.log('toggleCamera called. Camera section display:', cameraSection.style.display);
+            
+            if (cameraSection.style.display === 'none') {
+                console.log('Starting camera scanner...');
+                cameraSection.style.display = 'block';
+                qrInputSection.style.display = 'none';
+                startQRScanner();
+            } else {
+                console.log('Stopping camera scanner...');
+                cameraSection.style.display = 'none';
+                qrInputSection.style.display = 'block';
+                stopQRScanner();
+            }
+        }
+
+        async function startQRScanner() {
+            if (isScanning) return;
+            
+            showCameraStatus('Initializing camera...');
+            
+            try {
+                // First, check if we can access the camera
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment', // Prefer back camera on mobile
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+                
+                currentStream = stream;
+                showCameraStatus('Camera accessed successfully. Starting scanner...');
+                
+                // Stop the test stream
+                stream.getTracks().forEach(track => track.stop());
+                
+                // Try the html5-qrcode library first
+                try {
+                    await startHtml5QrCodeScanner();
+                } catch (error) {
+                    console.warn('Html5QrCode failed, trying fallback:', error);
+                    await startFallbackScanner();
+                }
+                
+            } catch (error) {
+                console.error('Camera access error:', error);
+                handleCameraError(error);
+            }
+        }
+
+        async function startHtml5QrCodeScanner() {
+            return new Promise((resolve, reject) => {
+                try {
+                    const config = {
+                        fps: 10,
+                        qrbox: { width: 250, height: 250 },
+                        aspectRatio: 1.0
+                    };
+                    
+                    html5QrcodeScanner = new Html5QrcodeScanner(
+                        "qr-reader", 
+                        config,
+                        /* verbose= */ false
+                    );
+                    
+                    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+                    isScanning = true;
+                    hideCameraStatus();
+                    resolve();
+                    
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        }
+
+        async function startFallbackScanner() {
+            showCameraStatus('Using fallback camera scanner...');
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    } 
+                });
+                
+                currentStream = stream;
+                
+                // Create video element
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                video.autoplay = true;
+                video.playsInline = true;
+                
+                // Create canvas for QR detection
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                
+                // Create scanning overlay
+                const overlay = document.createElement('div');
+                overlay.style.cssText = `
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    width: 250px;
+                    height: 250px;
+                    border: 3px solid #dc3545;
+                    border-radius: 10px;
+                    background: transparent;
+                    pointer-events: none;
+                    z-index: 10;
+                `;
+                
+                // Add corner indicators
+                const corners = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+                corners.forEach(corner => {
+                    const cornerEl = document.createElement('div');
+                    cornerEl.style.cssText = `
+                        position: absolute;
+                        width: 20px;
+                        height: 20px;
+                        border: 3px solid #dc3545;
+                        background: rgba(220, 53, 69, 0.3);
+                    `;
+                    
+                    if (corner.includes('top')) cornerEl.style.top = '-3px';
+                    if (corner.includes('bottom')) cornerEl.style.bottom = '-3px';
+                    if (corner.includes('left')) cornerEl.style.left = '-3px';
+                    if (corner.includes('right')) cornerEl.style.right = '-3px';
+                    
+                    if (corner === 'top-left') {
+                        cornerEl.style.borderRight = 'none';
+                        cornerEl.style.borderBottom = 'none';
+                    } else if (corner === 'top-right') {
+                        cornerEl.style.borderLeft = 'none';
+                        cornerEl.style.borderBottom = 'none';
+                    } else if (corner === 'bottom-left') {
+                        cornerEl.style.borderRight = 'none';
+                        cornerEl.style.borderTop = 'none';
+                    } else if (corner === 'bottom-right') {
+                        cornerEl.style.borderLeft = 'none';
+                        cornerEl.style.borderTop = 'none';
+                    }
+                    
+                    overlay.appendChild(cornerEl);
+                });
+                
+                // Replace the qr-reader div content
+                const qrReader = document.getElementById('qr-reader');
+                qrReader.innerHTML = '';
+                qrReader.style.position = 'relative';
+                qrReader.appendChild(video);
+                qrReader.appendChild(canvas);
+                qrReader.appendChild(overlay);
+                
+                // Style the video
+                video.style.width = '100%';
+                video.style.height = 'auto';
+                video.style.borderRadius = '10px';
+                canvas.style.display = 'none';
+                
+                // Wait for video to be ready
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        resolve();
+                    };
+                });
+                
+                isScanning = true;
+                hideCameraStatus();
+                
+                // Start scanning loop
+                fallbackScanner = setInterval(() => {
+                    if (!isScanning || scanCooldown) return;
+                    
+                    try {
+                        // Draw video frame to canvas
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        
+                        // Get image data for QR detection
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        
+                        // Use jsQR to detect QR codes
+                        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                            inversionAttempts: "dontInvert",
+                        });
+                        
+                        if (code && code.data && code.data !== lastScannedCode) {
+                            console.log('QR Code detected (fallback):', code.data);
+                            lastScannedCode = code.data;
+                            
+                            // Stop scanning immediately
+                            isScanning = false;
+                            
+                            // Prevent multiple scans of the same code
+                            scanCooldown = true;
+                            setTimeout(() => {
+                                scanCooldown = false;
+                                lastScannedCode = null;
+                            }, 2000);
+                            
+                            // Process the QR code
+                            onScanSuccess(code.data, { decodedText: code.data });
+                        }
+                        
+                    } catch (error) {
+                        console.error('Error in fallback scanner:', error);
+                    }
+                    
+                }, 100); // Scan every 100ms
+                
+            } catch (error) {
+                console.error('Fallback scanner error:', error);
+                handleCameraError(error);
+            }
+        }
+
+        function stopQRScanner() {
+            console.log('stopQRScanner called. isScanning:', isScanning);
+            
+            if (html5QrcodeScanner && isScanning) {
+                console.log('Clearing html5QrcodeScanner...');
+                html5QrcodeScanner.clear();
+                html5QrcodeScanner = null;
+                isScanning = false;
+            }
+            
+            if (fallbackScanner) {
+                console.log('Clearing fallbackScanner...');
+                clearInterval(fallbackScanner);
+                fallbackScanner = null;
+            }
+            
+            if (currentStream) {
+                console.log('Stopping current stream...');
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+            }
+            
+            // Always set isScanning to false
+            isScanning = false;
+            console.log('isScanning set to false');
+            
+            hideCameraStatus();
+            hideCameraError();
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            console.log('QR Code detected:', decodedText);
+            
+            // Validate the QR code - accept both LOYALTY- codes and Google Apps Script URLs
+            if (decodedText.startsWith('LOYALTY-') && decodedText.length === 19 || 
+                decodedText.includes('script.google.com') && decodedText.includes('customerID=')) {
+                
+                // Stop scanning
+                stopQRScanner();
+                
+                // Populate the QR code input field
+                document.getElementById('qr-code').value = decodedText;
+                
+                // Switch back to manual input
+                console.log('Switching back to manual input...');
+                toggleCamera();
+                
+                // Show the submit button
+                console.log('Showing submit button...');
+                document.getElementById('submit-btn').style.display = 'inline-block';
+                
+                // Show success message
+                showResult('success', 'QR Code Scanned!', 'QR code has been scanned successfully. Please review and submit.');
+            } else {
+                showResult('error', 'Invalid QR Code', 'This is not a valid loyalty card QR code.');
+            }
+        }
+
+        function onScanFailure(error) {
+            // Handle scan failure silently for continuous scanning
+            console.log(`QR scan error = ${error}`);
+        }
+
+        function showCameraStatus(message) {
+            const statusDiv = document.getElementById('camera-status');
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
+        }
+
+        function hideCameraStatus() {
+            document.getElementById('camera-status').style.display = 'none';
+        }
+
+        function handleCameraError(error) {
+            let errorMessage = 'Failed to access camera.';
+            
+            if (error.name === 'NotAllowedError') {
+                errorMessage = 'Camera access denied. Please allow camera permissions and try again.';
+            } else if (error.name === 'NotFoundError') {
+                errorMessage = 'No camera found on this device.';
+            } else if (error.name === 'NotSupportedError') {
+                errorMessage = 'Camera not supported on this device or browser.';
+            } else if (error.name === 'NotReadableError') {
+                errorMessage = 'Camera is in use by another application.';
+            } else if (error.name === 'OverconstrainedError') {
+                errorMessage = 'Camera does not meet the required constraints.';
+            } else if (error.name === 'TypeError') {
+                errorMessage = 'Camera access not supported in this browser. Please use HTTPS.';
+            }
+            
+            showCameraError(errorMessage);
+        }
+
+        function showCameraError(message) {
+            const errorDiv = document.getElementById('camera-error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideCameraError() {
+            document.getElementById('camera-error').style.display = 'none';
+        }
+
+
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        function scanQRCode() {
+            // This function is now used for processing uploaded QR code files
+            const qrCode = document.getElementById('qr-code').value.trim();
+            const visitAmount = document.getElementById('visit-amount').value;
+
+            if (!qrCode) {
+                showResult('error', 'Error', 'No QR code to process.');
+                return;
+            }
+
+            // Show loading state
+            const scanBtn = document.getElementById('scan-btn');
+            const scanText = document.getElementById('scan-text');
+            const scanLoading = document.getElementById('scan-loading');
+            
+            scanBtn.disabled = true;
+            scanText.style.display = 'none';
+            scanLoading.style.display = 'inline-block';
+
+            // Prepare data
+            const data = {
+                qr_code: qrCode
+            };
+
+            if (visitAmount) {
+                data.visit_amount = parseInt(visitAmount);
+            }
+
+            // Send scan request
+            fetch('/admin-qr/qr-scan-api/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    showResult('success', 'Success!', 
+                        `Points awarded to ${result.user}. New balance: ${result.new_balance} points.`);
+                    
+                    // Show points awarded
+                    document.getElementById('points-number').textContent = `+${result.points_awarded}`;
+                    document.getElementById('points-label').textContent = 'Points Awarded';
+                    document.getElementById('points-display').style.display = 'block';
+                    
+                    // Show the submit button
+                    document.getElementById('submit-btn').style.display = 'inline-block';
+                    
+                    // Reload recent scans
+                    loadRecentScans();
+                } else {
+                    showResult('error', 'Error', result.error);
+                }
+            })
+            .catch(error => {
+                showResult('error', 'Error', 'Failed to process scan. Please try again.');
+                console.error('Error:', error);
+            })
+            .finally(() => {
+                // Reset button state
+                scanBtn.disabled = false;
+                scanText.style.display = 'inline';
+                scanLoading.style.display = 'none';
+            });
+        }
+
+        function showResult(type, title, message) {
+            const resultSection = document.getElementById('result-section');
+            const resultIcon = document.getElementById('result-icon');
+            const resultTitle = document.getElementById('result-title');
+            const resultMessage = document.getElementById('result-message');
+            const pointsDisplay = document.getElementById('points-display');
+
+            // Set icon
+            if (type === 'success') {
+                resultIcon.textContent = '✅';
+            } else if (type === 'error') {
+                resultIcon.textContent = '❌';
+            } else {
+                resultIcon.textContent = 'ℹ️';
+            }
+
+            // Set content
+            resultTitle.textContent = title;
+            resultMessage.textContent = message;
+
+            // Set styling
+            resultSection.className = `result-section result-${type}`;
+            resultSection.style.display = 'block';
+
+            // Hide points display for errors
+            if (type === 'error') {
+                pointsDisplay.style.display = 'none';
+            }
+
+            // Auto-hide after 5 seconds for success
+            if (type === 'success') {
+                setTimeout(() => {
+                    resultSection.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        function loadRecentScans() {
+            fetch('/admin-qr/qr-scan-dashboard/')
+            .then(response => response.text())
+            .then(html => {
+                // Extract recent scans from the dashboard
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const recentScans = doc.querySelectorAll('.scan-item');
+                
+                const recentScansList = document.getElementById('recent-scans-list');
+                
+                if (recentScans.length === 0) {
+                    recentScansList.innerHTML = '<p style="text-align: center; color: #6c757d;">No recent scans</p>';
+                } else {
+                    let html = '';
+                    recentScans.forEach(scan => {
+                        html += scan.outerHTML;
+                    });
+                    recentScansList.innerHTML = html;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading recent scans:', error);
+                document.getElementById('recent-scans-list').innerHTML = 
+                    '<p style="text-align: center; color: #6c757d;">Failed to load recent scans</p>';
+            });
+        }
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', function() {
+            stopQRScanner();
+        });
+
+        // Modal Functions
+        function showScanOptions() {
+            document.getElementById('scan-options-modal').style.display = 'flex';
+        }
+
+        function hideScanOptions() {
+            document.getElementById('scan-options-modal').style.display = 'none';
+        }
+
+        function startCameraScan() {
+            hideScanOptions();
+            toggleCamera(); // This will show the camera section
+        }
+
+        function uploadQRFile() {
+            hideScanOptions();
+            document.getElementById('qr-file-input').click(); // Trigger file input
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                            inversionAttempts: "dontInvert",
+                        });
+                        if (code && code.data) {
+                            // Validate the QR code - accept both LOYALTY- codes and Google Apps Script URLs
+                            if (code.data.startsWith('LOYALTY-') && code.data.length === 19 || 
+                                code.data.includes('script.google.com') && code.data.includes('customerID=')) {
+                                
+                                document.getElementById('qr-code').value = code.data;
+                                // Show the submit button
+                                document.getElementById('submit-btn').style.display = 'inline-block';
+                                // Show success message
+                                showResult('success', 'QR Code Uploaded!', 'QR code has been uploaded successfully. Please review and submit.');
+                            } else {
+                                showResult('error', 'Invalid QR Code', 'This is not a valid loyalty card QR code.');
+                            }
+                        } else {
+                            showResult('error', 'QR Code Not Found', 'Could not detect a QR code in the uploaded image.');
+                        }
+                    };
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function submitForm() {
+            const qrCode = document.getElementById('qr-code').value.trim();
+            const visitAmount = document.getElementById('visit-amount').value;
+
+            if (!qrCode) {
+                showResult('error', 'Error', 'Please scan or enter a QR code.');
+                return;
+            }
+
+            // Show loading state
+            const submitBtn = document.getElementById('submit-btn');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<span class="loading"></span> Processing...';
+            submitBtn.disabled = true;
+
+            // Prepare data
+            const data = {
+                qr_code: qrCode
+            };
+
+            if (visitAmount) {
+                data.visit_amount = parseInt(visitAmount);
+            }
+
+            // Send scan request
+            fetch('/admin-qr/qr-scan-api/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    showResult('success', 'Success!', 
+                        `Points awarded to ${result.user}. New balance: ${result.new_balance} points.`);
+                    
+                    // Show points awarded
+                    document.getElementById('points-number').textContent = `+${result.points_awarded}`;
+                    document.getElementById('points-label').textContent = 'Points Awarded';
+                    document.getElementById('points-display').style.display = 'block';
+                    
+                    // Reset form
+                    resetForm();
+                    
+                    // Reload recent scans
+                    loadRecentScans();
+                } else {
+                    showResult('error', 'Error', result.error);
+                }
+            })
+            .catch(error => {
+                showResult('error', 'Error', 'Failed to process scan. Please try again.');
+                console.error('Error:', error);
+            })
+            .finally(() => {
+                // Reset button state
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            });
+        }
+
+        function resetForm() {
+            document.getElementById('qr-code').value = '';
+            document.getElementById('visit-amount').value = '';
+            document.getElementById('submit-btn').style.display = 'none';
+            document.getElementById('points-display').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
