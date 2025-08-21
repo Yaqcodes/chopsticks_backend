@@ -146,8 +146,11 @@ TIME_ZONE = "Africa/Lagos"
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
-# STATIC_ROOT = os.path.join(BASE_DIR, 'static')
-# If you have a top-level "static" folder at the same level as manage.py:
+
+# STATIC_ROOT is where collectstatic will put files for production
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# STATICFILES_DIRS is where Django looks for static files during development
 STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
