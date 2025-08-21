@@ -203,3 +203,68 @@ class PaystackWebhookView(View):
         except Exception as e:
             logger.error(f"Webhook processing error: {str(e)}")
             return HttpResponse('Internal error', status=500)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def payment_callback(request):
+    """
+    Handle Paystack payment callback redirects.
+    This is called when users are redirected back from Paystack after payment.
+    """
+    try:
+        # Get reference from query parameters
+        reference = request.GET.get('reference')
+        trxref = request.GET.get('trxref')
+        
+        if not reference:
+            return Response({
+                'error': 'Missing payment reference',
+                'message': 'Payment reference not found in callback'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Verify the payment
+        paystack = PaystackService()
+        result = paystack.verify_transaction(reference)
+        
+        # Get payment record
+        payment = get_object_or_404(Payment, reference=reference)
+        
+        # Update payment status
+        payment.paystack_status = result.get('status', '')
+        payment.verified_at = timezone.now()
+        
+        if result.get('status') == 'success':
+            payment.status = 'success'
+            payment.order.payment_status = 'paid'
+            payment.order.payment_verified_at = timezone.now()
+            payment.order.save()
+            
+            # Award loyalty points
+            if payment.order.user:
+                award_points_for_order(payment.order)
+            
+            return Response({
+                'status': 'success',
+                'message': 'Payment completed successfully',
+                'order_number': payment.order.order_number,
+                'amount': str(payment.amount),
+                'reference': reference
+            })
+        else:
+            payment.status = 'failed'
+            payment.order.payment_status = 'failed'
+            payment.order.save()
+            
+            return Response({
+                'status': 'failed',
+                'message': 'Payment verification failed',
+                'reference': reference
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    except Exception as e:
+        logger.error(f"Payment callback error: {str(e)}")
+        return Response({
+            'error': 'Payment callback processing failed',
+            'message': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
