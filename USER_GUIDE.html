@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chopsticks & Bowls - Restaurant Management Guide</title>
+    <style>
+        /* GitHub-like styling */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #24292e;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #ffffff;
+            margin-top: 120px; /* Account for fixed navigation */
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            margin-top: 24px;
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.25;
+            color: #24292e;
+        }
+        
+        h1 {
+            font-size: 2em;
+            border-bottom: 1px solid #eaecef;
+            padding-bottom: 0.3em;
+        }
+        
+        h2 {
+            font-size: 1.5em;
+            border-bottom: 1px solid #eaecef;
+            padding-bottom: 0.3em;
+        }
+        
+        h3 {
+            font-size: 1.25em;
+        }
+        
+        p {
+            margin-bottom: 16px;
+        }
+        
+        ul, ol {
+            margin-bottom: 16px;
+            padding-left: 2em;
+        }
+        
+        li {
+            margin-bottom: 0.25em;
+        }
+        
+        code {
+            background-color: rgba(27, 31, 35, 0.05);
+            border-radius: 3px;
+            font-size: 85%;
+            margin: 0;
+            padding: 0.2em 0.4em;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        }
+        
+        pre {
+            background-color: #f6f8fa;
+            border-radius: 3px;
+            font-size: 85%;
+            line-height: 1.45;
+            overflow: auto;
+            padding: 16px;
+            border: 1px solid #e1e4e8;
+        }
+        
+        pre code {
+            background-color: transparent;
+            border: 0;
+            display: inline;
+            line-height: inherit;
+            margin: 0;
+            overflow: visible;
+            padding: 0;
+            word-wrap: normal;
+        }
+        
+        /* Navigation - Fixed at top */
+        .nav {
+            background-color: #f6f8fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 24px;
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 40px);
+            max-width: 1160px;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .nav h3 {
+            margin-top: 0;
+            color: #0366d6;
+            font-size: 1.1em;
+        }
+        
+        .nav ul {
+            list-style: none;
+            padding-left: 0;
+            margin: 8px 0 0 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .nav li {
+            margin-bottom: 0;
+        }
+        
+        .nav a {
+            color: #0366d6;
+            text-decoration: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            transition: background-color 0.2s;
+            font-size: 0.9em;
+            white-space: nowrap;
+        }
+        
+        .nav a:hover {
+            background-color: #e1e4e8;
+            text-decoration: none;
+        }
+        
+        /* Smooth scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        /* Footer */
+        .footer {
+            margin-top: 48px;
+            padding-top: 24px;
+            border-top: 1px solid #eaecef;
+            color: #6c757d;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .nav {
+                width: calc(100% - 20px);
+                padding: 12px;
+            }
+            
+            .nav ul {
+                flex-direction: column;
+                gap: 4px;
+            }
+            
+            .nav a {
+                font-size: 0.85em;
+                padding: 3px 6px;
+            }
+            
+            body {
+                margin-top: 140px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <h3>📚 Quick Navigation</h3>
+        <ul>
+            <li><a href="#getting-started---first-time-setup">🏠 Getting Started</a></li>
+            <li><a href="#managing-your-menu">🍽️ Managing Your Menu</a></li>
+            <li><a href="#managing-orders">📦 Managing Orders</a></li>
+            <li><a href="#loyalty-system-management">💳 Loyalty System</a></li>
+            <li><a href="#promotional-codes">🎫 Promotional Codes</a></li>
+            <li><a href="#restaurant-settings--configuration">⚙️ Restaurant Settings</a></li>
+            <li><a href="#customer-management">👥 Customer Management</a></li>
+            <li><a href="#payment-management">💰 Payment Management</a></li>
+            <li><a href="#troubleshooting-common-issues">🆘 Troubleshooting</a></li>
+        </ul>
+    </div>
+
+    <p><h1 id="chopsticks-bowls-restaurant-management-system">Chopsticks & Bowls Restaurant Management System</h1>
+<h2 id="complete-user-guide-for-restaurant-managers">Complete User Guide for Restaurant Managers</h2></p><p>Welcome to your restaurant management system! This guide will walk you through every feature and setting available to help you run your restaurant efficiently.</p><p>---</p><p><h2 id="getting-started-first-time-setup">🏠 <strong>Getting Started - First Time Setup</strong></h2></p><p><h3 id="Accessing Your System">Accessing Your System</h3>
+<ul>
+<li><strong>Open your web browser</strong> and go to your restaurant's admin panel</li>
+<li><strong>Log in</strong> using your username and password</li>
+<li>You'll see the main dashboard with all your restaurant management tools</li>
+</ul><p><h3 id="Initial Setup (First Time Only)">Initial Setup (First Time Only)</h3>
+If this is your first time using the system, you'll need to set up your restaurant's basic information:</p><ul>
+<li><strong>Go to "Core" → "Restaurant Settings"</strong></li>
+<li><strong>Fill in your restaurant details:</strong></li>
+</ul>
+   - Restaurant name
+   - Address and contact information
+   - Opening hours
+   - Delivery settings
+<ul>
+<li><strong>Click "Save"</strong> to create your restaurant profile</li>
+</ul><p>---</p><p><h2 id="managing-your-menu">🍽️ <strong>Managing Your Menu</strong></h2></p><p><h3 id="Adding Menu Categories">Adding Menu Categories</h3>
+<ul>
+<li><strong>Go to "Menu" → "Categories"</strong></li>
+<li><strong>Click "Add Category"</strong></li>
+<li><strong>Fill in:</strong></li>
+</ul>
+   - Category name (e.g., "Appetizers", "Main Dishes", "Desserts")
+   - Description (optional)
+   - Upload a category image (optional)
+   - Set sort order (lower numbers appear first)
+<ul>
+<li><strong>Click "Save"</strong></li>
+</ul><p><h3 id="Adding Menu Items">Adding Menu Items</h3>
+<ul>
+<li><strong>Go to "Menu" → "Menu Items"</strong></li>
+<li><strong>Click "Add Menu Item"</strong></li>
+<li><strong>Fill in the details:</strong></li>
+</ul>
+   - <strong>Basic Information:</strong>
+     - Item name
+     - Description
+     - Price
+     - Select category
+     - Upload item image
+   
+   - <strong>Status & Display:</strong>
+     - Check "Available" if customers can order this item
+     - Check "Featured" to highlight on your website
+     - Set preparation time (in minutes)
+     - Set sort order within the category
+   
+   - <strong>Additional Information (optional):</strong>
+     - Add badges (Spicy, Vegetarian, Vegan, Gluten-Free, Popular, New, Chef Special)
+     - List allergens
+     - Add nutritional information
+<ul>
+<li><strong>Click "Save"</strong></li>
+</ul><p><h3 id="Managing Menu Items">Managing Menu Items</h3>
+<ul>
+<li><strong>Edit an item:</strong> Click on the item name in the list</li>
+<li><strong>Hide an item:</strong> Uncheck "Available" in the item settings</li>
+<li><strong>Feature an item:</strong> Check "Featured" to highlight it</li>
+<li><strong>Change prices:</strong> Edit the price field and save</li>
+<li><strong>Reorder items:</strong> Change the sort order numbers</li>
+</ul><p>---</p><p><h2 id="managing-orders">📦 <strong>Managing Orders</strong></h2></p><p><h3 id="Viewing Orders">Viewing Orders</h3>
+<ul>
+<li><strong>Go to "Orders" → "Orders"</strong></li>
+<li><strong>You'll see all orders with:</strong></li>
+</ul>
+   - Order number
+   - Customer name
+   - Order status
+   - Payment status
+   - Total amount
+   - Order date</p><p><h3 id="Order Statuses Explained">Order Statuses Explained</h3>
+<ul>
+<li><strong>Pending:</strong> New order received, needs confirmation</li>
+<li><strong>Confirmed:</strong> Order confirmed, ready to prepare</li>
+<li><strong>Preparing:</strong> Kitchen is working on the order</li>
+<li><strong>Ready:</strong> Order ready for pickup/delivery</li>
+<li><strong>Out for Delivery:</strong> Order is being delivered</li>
+<li><strong>Delivered:</strong> Order completed successfully</li>
+<li><strong>Cancelled:</strong> Order was cancelled</li>
+<li><strong>Refunded:</strong> Payment was refunded</li>
+</ul><p><h3 id="Processing Orders">Processing Orders</h3>
+<ul>
+<li><strong>Click on an order</strong> to see full details</li>
+<li><strong>Update the status</strong> as the order progresses:</li>
+</ul>
+   - Click the status dropdown
+   - Select the new status
+   - Click "Save"
+<ul>
+<li><strong>View order details</strong> including:</li>
+</ul>
+   - Customer information
+   - Items ordered with quantities
+   - Special instructions
+   - Delivery address
+   - Payment information</p><p><h3 id="Quick Order Actions">Quick Order Actions</h3>
+Use the action buttons to quickly update multiple orders:
+<ul>
+<li><strong>Mark as Confirmed:</strong> Select orders and use "Mark selected orders as confirmed"</li>
+<li><strong>Mark as Preparing:</strong> Select orders and use "Mark selected orders as preparing"</li>
+<li><strong>Mark as Ready:</strong> Select orders and use "Mark selected orders as ready"</li>
+<li><strong>Mark as Delivered:</strong> Select orders and use "Mark selected orders as delivered"</li>
+</ul><p>---</p><p><h2 id="loyalty-system-management">💳 <strong>Loyalty System Management</strong></h2></p><p><h3 id="Understanding Your Loyalty System">Understanding Your Loyalty System</h3>
+Your restaurant has a complete loyalty program where customers earn points for:
+<ul>
+<li><strong>Online orders</strong> (automatic)</li>
+<li><strong>Physical visits</strong> (using QR codes)</li>
+<li><strong>Referrals</strong> (when customers bring friends)</li>
+</ul><p><h3 id="Managing Loyalty Cards">Managing Loyalty Cards</h3>
+<ul>
+<li><strong>Go to "Loyalty" → "Loyalty Cards"</strong></li>
+<li><strong>You'll see all loyalty cards with:</strong></li>
+</ul>
+   - QR code number
+   - Customer assigned (if any)
+   - Status (Active/Inactive/Unassigned)
+   - Last scan date</p><p><h3 id="Creating New Loyalty Cards">Creating New Loyalty Cards</h3>
+<ul>
+<li><strong>Click "Add Loyalty Card"</strong></li>
+<li><strong>Enter a customer ID</strong> (1-1000) or let the system generate a LOYALTY- code</li>
+<li><strong>Assign to a customer</strong> (optional - can be assigned later)</li>
+<li><strong>Click "Save"</strong></li>
+</ul><p><h3 id="QR Code Scanning (For Physical Visits)">QR Code Scanning (For Physical Visits)</h3>
+<ul>
+<li><strong>Use the "QR Scan Interface"</strong> button at the top of the loyalty cards page</li>
+<li><strong>Scan customer loyalty cards</strong> using your device's camera</li>
+<li><strong>Award points</strong> for physical visits</li>
+<li><strong>Track all scans</strong> in the "QR Scan Dashboard"</li>
+</ul><p><h3 id="Managing Customer Points">Managing Customer Points</h3>
+<ul>
+<li><strong>Go to "Loyalty" → "User Points"</strong></li>
+<li><strong>View each customer's:</strong></li>
+</ul>
+   - Current point balance
+   - Total points earned
+   - Total points spent
+<ul>
+<li><strong>Click on a customer</strong> to see their complete point history</li>
+</ul><p><h3 id="Setting Up Rewards">Setting Up Rewards</h3>
+<ul>
+<li><strong>Go to "Loyalty" → "Rewards"</strong></li>
+<li><strong>Click "Add Reward"</strong></li>
+<li><strong>Configure the reward:</strong></li>
+</ul>
+   - <strong>Name:</strong> What the reward is called
+   - <strong>Description:</strong> What customers get
+   - <strong>Type:</strong> Discount, Free Item, Free Delivery, or Cashback
+   - <strong>Points Required:</strong> How many points needed to redeem
+   - <strong>Value:</strong> Discount percentage/amount or free item
+   - <strong>Usage Limits:</strong> Maximum times this reward can be used
+   - <strong>Validity Period:</strong> When the reward is available
+<ul>
+<li><strong>Click "Save"</strong></li>
+</ul><p><h3 id="Tracking Reward Usage">Tracking Reward Usage</h3>
+<ul>
+<li><strong>Go to "Loyalty" → "User Rewards"</strong></li>
+<li><strong>See all redeemed rewards:</strong></li>
+</ul>
+   - Which customer redeemed what
+   - When it was redeemed
+   - Whether it's been used
+   - When it expires</p><p>---</p><p><h2 id="promotional-codes">🎫 <strong>Promotional Codes</strong></h2></p><p><h3 id="Creating Promo Codes">Creating Promo Codes</h3>
+<ul>
+<li><strong>Go to "Promotions" → "Promo Codes"</strong></li>
+<li><strong>Click "Add Promo Code"</strong></li>
+<li><strong>Set up your promotion:</strong></li>
+</ul>
+   - <strong>Code:</strong> The code customers will enter (e.g., "SAVE20")
+   - <strong>Description:</strong> What the promotion offers
+   - <strong>Type:</strong> Percentage discount or fixed amount off
+   - <strong>Value:</strong> Discount percentage or amount
+   - <strong>Minimum Order:</strong> Minimum order amount required
+   - <strong>Maximum Discount:</strong> Cap on discount amount (optional)
+   - <strong>Usage Limit:</strong> How many times it can be used
+   - <strong>Valid Period:</strong> Start and end dates
+<ul>
+<li><strong>Click "Save"</strong></li>
+</ul><p><h3 id="Managing Promo Codes">Managing Promo Codes</h3>
+<ul>
+<li><strong>Activate/Deactivate:</strong> Check/uncheck "Active"</li>
+<li><strong>Edit details:</strong> Click on the promo code name</li>
+<li><strong>Track usage:</strong> See how many times each code has been used</li>
+<li><strong>Set expiration:</strong> Update the valid until date</li>
+</ul><p>---</p><p><h2 id="restaurant-settings-configuration">⚙️ <strong>Restaurant Settings & Configuration</strong></h2></p><p><h3 id="Basic Restaurant Information">Basic Restaurant Information</h3>
+<ul>
+<li><strong>Go to "Core" → "Restaurant Settings"</strong></li>
+<li><strong>Update your details:</strong></li>
+</ul>
+   - Restaurant name and description
+   - Contact information (phone, email, website)
+   - Physical address
+   - Social media links</p><p><h3 id="Operating Hours">Operating Hours</h3>
+<ul>
+<li><strong>In Restaurant Settings, set:</strong></li>
+</ul>
+   - Opening time
+   - Closing time
+   - Check "Is Open" to indicate current status
+<ul>
+<li><strong>Use "Is Open"</strong> to quickly close your restaurant (e.g., during maintenance)</li>
+</ul><p><h3 id="Delivery Settings">Delivery Settings</h3>
+Configure how delivery works for your restaurant:</p><ul>
+<li><strong>Delivery Radius:</strong> Maximum distance you'll deliver to (in kilometers)</li>
+<li><strong>Minimum Order:</strong> Smallest order amount you'll accept</li>
+<li><strong>Free Delivery Threshold:</strong> Order amount that qualifies for free delivery</li>
+<li><strong>Delivery Fees:</strong></li>
+</ul>
+   - <strong>Base Fee:</strong> Minimum delivery charge
+   - <strong>Per Kilometer:</strong> Additional charge per kilometer
+   - <strong>Pickup Fee:</strong> Charge for pickup orders (usually 0)
+<ul>
+<li><strong>VAT Rate:</strong> Tax percentage (default 7.5%)</li>
+</ul><p><h3 id="Payment Methods">Payment Methods</h3>
+Choose which payment methods you accept:
+<ul>
+<li><strong>Cash:</strong> Traditional cash payments</li>
+<li><strong>Card:</strong> Credit/debit card payments</li>
+<li><strong>Mobile Money:</strong> Mobile payment services</li>
+</ul><p><h3 id="Restaurant Location">Restaurant Location</h3>
+Set your exact coordinates for accurate delivery calculations:
+<ul>
+<li><strong>Enter your latitude and longitude</strong> (decimal format)</li>
+<li><strong>Use the "Set coordinates for Nigerian city"</strong> action for common cities</li>
+<li><strong>Coordinates help calculate:</strong></li>
+</ul>
+   - Accurate delivery distances
+   - Proper delivery fees
+   - Delivery area boundaries</p><p><h3 id="Quick Actions for Delivery">Quick Actions for Delivery</h3>
+Use these actions to quickly adjust delivery settings:
+<ul>
+<li><strong>Reset Delivery Fees:</strong> Return to default delivery charges</li>
+<li><strong>Enable Free Delivery:</strong> Set all delivery fees to 0</li>
+<li><strong>Disable Free Delivery:</strong> Restore default delivery fees</li>
+</ul><p>---</p><p><h2 id="customer-management">👥 <strong>Customer Management</strong></h2></p><p><h3 id="Viewing Customer Accounts">Viewing Customer Accounts</h3>
+<ul>
+<li><strong>Go to "Accounts" → "Users"</strong></li>
+<li><strong>See all registered customers:</strong></li>
+</ul>
+   - Name and email
+   - Phone number
+   - Registration date
+   - Referral information</p><p><h3 id="Customer Details">Customer Details</h3>
+Click on a customer to see:
+<ul>
+<li><strong>Personal Information:</strong> Name, email, phone, birth date</li>
+<li><strong>Addresses:</strong> All saved delivery addresses</li>
+<li><strong>Order History:</strong> Complete list of past orders</li>
+<li><strong>Loyalty Information:</strong> Points balance and rewards</li>
+<li><strong>Referral Code:</strong> Their unique referral code</li>
+</ul><p><h3 id="Managing Customer Addresses">Managing Customer Addresses</h3>
+<ul>
+<li><strong>Go to "Addresses" → "Addresses"</strong></li>
+<li><strong>View all customer addresses:</strong></li>
+</ul>
+   - Customer name
+   - Full address
+   - Address type (Home, Work, Other)
+   - Whether it's the default address</p><p>---</p><p><h2 id="payment-management">💰 <strong>Payment Management</strong></h2></p><p><h3 id="Viewing Payments">Viewing Payments</h3>
+<ul>
+<li><strong>Go to "Payments" → "Payments"</strong></li>
+<li><strong>Track all payment transactions:</strong></li>
+</ul>
+   - Payment reference
+   - Order number
+   - Amount
+   - Status (Pending, Success, Failed, Abandoned)
+   - Customer email
+   - Payment date</p><p><h3 id="Payment Statuses">Payment Statuses</h3>
+<ul>
+<li><strong>Pending:</strong> Payment initiated but not completed</li>
+<li><strong>Success:</strong> Payment completed successfully</li>
+<li><strong>Failed:</strong> Payment attempt failed</li>
+<li><strong>Abandoned:</strong> Customer started payment but didn't complete</li>
+</ul><p><h3 id="Payment Verification">Payment Verification</h3>
+The system automatically:
+<ul>
+<li>Verifies payments with Paystack</li>
+<li>Updates order status when payment is confirmed</li>
+<li>Awards loyalty points for successful payments</li>
+<li>Sends confirmation emails to customers</li>
+</ul><p>---</p><p><h2 id="system-management">🔧 <strong>System Management</strong></h2></p><p><h3 id="Maintenance Mode">Maintenance Mode</h3>
+When you need to temporarily close your system:
+<ul>
+<li><strong>Go to "Core" → "Restaurant Settings"</strong></li>
+<li><strong>Check "Maintenance Mode"</strong></li>
+<li><strong>Add a maintenance message</strong> explaining why you're closed</li>
+<li><strong>Save changes</strong></li>
+</ul><p><h3 id="Database Management">Database Management</h3>
+Use these commands in your server terminal:</p><p><strong>Setup Restaurant Settings:</strong>
+<pre><code>bash
+python manage.py setup_restaurant_settings
+</code></pre></p><p><strong>Generate Loyalty Cards:</strong>
+<pre><code>bash
+python manage.py generate_loyalty_cards --all
+</code></pre></p><p><strong>Create Sample Data (for testing):</strong>
+<pre><code>bash
+python manage.py create_dummy_data
+</code></pre></p><p><h3 id="System Health">System Health</h3>
+<ul>
+<li><strong>Check server logs</strong> for any errors</li>
+<li><strong>Monitor database size</strong> and performance</li>
+<li><strong>Verify payment webhooks</strong> are working</li>
+<li><strong>Test loyalty card scanning</strong> regularly</li>
+</ul><p>---</p><p><h2 id="mobile-website-features">📱 <strong>Mobile & Website Features</strong></h2></p><p><h3 id="What Customers Can Do">What Customers Can Do</h3>
+Your customers can:
+<ul>
+<li><strong>Browse your menu</strong> with categories and search</li>
+<li><strong>Place orders</strong> for delivery or pickup</li>
+<li><strong>Track orders</strong> in real-time</li>
+<li><strong>Earn loyalty points</strong> on every order</li>
+<li><strong>Redeem rewards</strong> using their points</li>
+<li><strong>Save delivery addresses</strong> for quick ordering</li>
+<li><strong>Use promotional codes</strong> for discounts</li>
+<li><strong>Pay securely</strong> with cards or mobile money</li>
+</ul><p><h3 id="Customer Experience">Customer Experience</h3>
+<ul>
+<li><strong>Responsive design</strong> works on all devices</li>
+<li><strong>Real-time updates</strong> for order status</li>
+<li><strong>Automatic notifications</strong> for order progress</li>
+<li><strong>Easy payment</strong> with multiple options</li>
+<li><strong>Loyalty integration</strong> for every transaction</li>
+</ul><p>---</p><p><h2 id="pro-tips-for-restaurant-managers">🚀 <strong>Pro Tips for Restaurant Managers</strong></h2></p><p><h3 id="Daily Operations">Daily Operations</h3>
+<ul>
+<li><strong>Check new orders</strong> every 15-30 minutes</li>
+<li><strong>Update order status</strong> promptly to keep customers informed</li>
+<li><strong>Monitor loyalty card scans</strong> for physical visits</li>
+<li><strong>Review daily sales</strong> and popular items</li>
+</ul><p><h3 id="Weekly Tasks">Weekly Tasks</h3>
+<ul>
+<li><strong>Update menu items</strong> (prices, availability, featured items)</li>
+<li><strong>Check loyalty point balances</strong> and reward redemptions</li>
+<li><strong>Review promotional code performance</strong></li>
+<li><strong>Analyze delivery patterns</strong> and adjust fees if needed</li>
+</ul><p><h3 id="Monthly Reviews">Monthly Reviews</h3>
+<ul>
+<li><strong>Analyze customer feedback</strong> and order patterns</li>
+<li><strong>Update restaurant settings</strong> based on performance</li>
+<li><strong>Review and adjust loyalty rewards</strong></li>
+<li><strong>Plan seasonal promotions</strong> and menu updates</li>
+</ul><p><h3 id="Customer Service">Customer Service</h3>
+<ul>
+<li><strong>Respond quickly</strong> to order issues</li>
+<li><strong>Use special instructions</strong> field for customer requests</li>
+<li><strong>Monitor delivery times</strong> and adjust estimates</li>
+<li><strong>Keep customers informed</strong> about order progress</li>
+</ul><p>---</p><p><h2 id="troubleshooting-common-issues">🆘 <strong>Troubleshooting Common Issues</strong></h2></p><p><h3 id="Orders Not Showing">Orders Not Showing</h3>
+<ul>
+<li>Check if you're logged in</li>
+<li>Refresh the page</li>
+<li>Verify the order status filters</li>
+</ul><p><h3 id="Payment Issues">Payment Issues</h3>
+<ul>
+<li>Check Paystack integration settings</li>
+<li>Verify webhook URLs are correct</li>
+<li>Check server logs for error messages</li>
+</ul><p><h3 id="Loyalty System Problems">Loyalty System Problems</h3>
+<ul>
+<li>Ensure loyalty cards are properly assigned</li>
+<li>Check if QR codes are generating correctly</li>
+<li>Verify point calculation rules</li>
+</ul><p><h3 id="Delivery Fee Issues">Delivery Fee Issues</h3>
+<ul>
+<li>Check restaurant coordinates are set correctly</li>
+<li>Verify delivery radius and fee settings</li>
+<li>Test with different delivery addresses</li>
+</ul><p>---</p><p><h2 id="getting-help">📞 <strong>Getting Help</strong></h2></p><p><h3 id="System Support">System Support</h3>
+<ul>
+<li><strong>Check the logs</strong> for error messages</li>
+<li><strong>Verify settings</strong> are configured correctly</li>
+<li><strong>Test features</strong> in a controlled environment</li>
+<li><strong>Contact your developer</strong> for technical issues</li>
+</ul><p><h3 id="Documentation">Documentation</h3>
+<ul>
+<li><strong>API Documentation:</strong> Available at <code>/swagger/</code> on your website</li>
+<li><strong>System Logs:</strong> Check <code>server.log</code> for detailed information</li>
+<li><strong>Admin Interface:</strong> Use the built-in help text and descriptions</li>
+</ul><p>---</p><p><h2 id="security-best-practices">🔒 <strong>Security Best Practices</strong></h2></p><p><h3 id="Admin Account Security">Admin Account Security</h3>
+<ul>
+<li><strong>Use strong passwords</strong> for admin accounts</li>
+<li><strong>Limit admin access</strong> to trusted staff only</li>
+<li><strong>Log out</strong> when leaving the admin panel</li>
+<li><strong>Change passwords</strong> regularly</li>
+</ul><p><h3 id="Data Protection">Data Protection</h3>
+<ul>
+<li><strong>Backup your database</strong> regularly</li>
+<li><strong>Monitor user activity</strong> for unusual patterns</li>
+<li><strong>Keep software updated</strong> with latest security patches</li>
+<li><strong>Use HTTPS</strong> for all customer interactions</li>
+</ul><p>---</p><p>This guide covers all the major features of your restaurant management system. Take time to explore each section and practice using the different tools. The system is designed to be intuitive, but don't hesitate to experiment with settings to find what works best for your restaurant.</p><p><strong>Remember:</strong> Your restaurant's success depends on how well you use these tools to serve your customers and manage your operations efficiently.</p><p>---</p><p>*Last Updated: [Current Date]*
+*System Version: Chopsticks & Bowls Restaurant Management System v1.0*
+</p>
+    
+    <div class="footer">
+        <p><strong>Chopsticks & Bowls Restaurant Management System</strong></p>
+        <p>Last Updated: August 21, 2025</p>
+        <p>System Version: v1.0</p>
+    </div>
+</body>
+</html>

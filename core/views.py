@@ -6,6 +6,12 @@ from rest_framework.response import Response
 from .models import RestaurantSettings
 from .serializers import RestaurantSettingsSerializer, PublicRestaurantSettingsSerializer
 
+from django.shortcuts import render
+from django.http import HttpResponse, HttpResponseRedirect
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.admin.views.decorators import staff_member_required
+import os
+
 
 class RestaurantSettingsView(generics.RetrieveUpdateAPIView):
     """Get and update restaurant settings (admin only)."""
@@ -74,3 +80,36 @@ def restaurant_settings(request):
             'error': 'Failed to retrieve restaurant settings',
             'details': str(e)
         }, status=500)
+
+
+@staff_member_required
+def user_guide(request):
+    """Serve the user guide HTML file."""
+    try:
+        # Get the path to the HTML file
+        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        html_file_path = os.path.join(current_dir, 'USER_GUIDE.html')
+        
+        # Check if file exists
+        if not os.path.exists(html_file_path):
+            return HttpResponse(
+                "User Guide not found. Please run the conversion script first.",
+                status=404
+            )
+        
+        # Read and serve the HTML file
+        with open(html_file_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        
+        return HttpResponse(html_content, content_type='text/html')
+        
+    except Exception as e:
+        return HttpResponse(
+            f"Error serving user guide: {str(e)}",
+            status=500
+        )
+
+@staff_member_required
+def redirect_to_guide(request):
+    """Redirect root URL to user guide."""
+    return HttpResponseRedirect('/guide/user-guide/')

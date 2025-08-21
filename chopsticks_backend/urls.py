@@ -37,11 +37,17 @@ schema_view = get_schema_view(
 )
 
 urlpatterns = [
+    # Root redirect to user guide
+    path('', include('core.urls')),
+    
     # Admin interface
     path('admin/', admin.site.urls),
     
     # Loyalty admin routes
     path('admin-qr/', include('loyalty.admin_urls')),
+    
+    # User Guide (easily accessible)
+    path('guide/', include('core.urls')),
     
     # API Documentation
     re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
