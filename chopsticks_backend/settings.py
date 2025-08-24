@@ -258,7 +258,7 @@ GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
 # Social Authentication settings
 SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = config('SOCIAL_AUTH_GOOGLE_OAUTH2_KEY', default='')
 SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = config('SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET', default='')
-OAUTH_BASE_URL = config('OAUTH_BASE_URL', default='http://localhost:8000')
+OAUTH_BASE_URL = config('OAUTH_BASE_URL', default='https://chopsticksandb0wls.pythonanywhere.com')
 
 SOCIAL_AUTH_FACEBOOK_KEY = config('SOCIAL_AUTH_FACEBOOK_KEY', default='')
 SOCIAL_AUTH_FACEBOOK_SECRET = config('SOCIAL_AUTH_FACEBOOK_SECRET', default='')
