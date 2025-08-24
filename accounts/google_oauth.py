@@ -85,7 +85,7 @@ def get_google_oauth_url():
         str: Google OAuth authorization URL
     """
     client_id = settings.SOCIAL_AUTH_GOOGLE_OAUTH2_KEY
-    redirect_uri = f"{settings.BASE_URL}/auth/google/callback"
+    redirect_uri = f"{settings.OAUTH_BASE_URL}/api/auth/google/callback/"
     scope = "openid email profile"
     
     return (
@@ -97,3 +97,47 @@ def get_google_oauth_url():
         f"access_type=offline&"
         f"prompt=consent"
     )
+
+
+def exchange_code_for_token(authorization_code):
+    """
+    Exchange authorization code for access token.
+    
+    Args:
+        authorization_code (str): The authorization code from Google OAuth callback
+        
+    Returns:
+        str: Access token from Google
+        
+    Raises:
+        ValidationError: If token exchange fails
+    """
+    try:
+        client_id = settings.SOCIAL_AUTH_GOOGLE_OAUTH2_KEY
+        client_secret = settings.SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET
+        redirect_uri = f"{settings.OAUTH_BASE_URL}/api/auth/google/callback/"
+        
+        token_url = "https://oauth2.googleapis.com/token"
+        data = {
+            'client_id': client_id,
+            'client_secret': client_secret,
+            'code': authorization_code,
+            'grant_type': 'authorization_code',
+            'redirect_uri': redirect_uri,
+        }
+        
+        response = requests.post(token_url, data=data, timeout=10)
+        response.raise_for_status()
+        
+        token_data = response.json()
+        access_token = token_data.get('access_token')
+        
+        if not access_token:
+            raise ValidationError('No access token received from Google')
+            
+        return access_token
+        
+    except requests.RequestException as req_error:
+        raise ValidationError(f'Failed to exchange code for token: {str(req_error)}')
+    except Exception as e:
+        raise ValidationError(f'Token exchange failed: {str(e)}')

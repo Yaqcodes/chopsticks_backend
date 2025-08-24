@@ -11,8 +11,9 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render, redirect
 from django.core.exceptions import ValidationError
+from decouple import config
 
 from .models import User, SocialAccount
 from .serializers import (
@@ -250,10 +251,23 @@ class SocialLoginView(generics.GenericAPIView):
                         last_name=last_name,
                     )
                     
-                    # Set avatar if provided
+                    # Download and save avatar immediately if provided
                     if avatar_url:
-                        user.avatar = avatar_url
-                        user.save()
+                        try:
+                            from utils.avatar_downloader import download_and_save_avatar
+                            local_avatar_path = download_and_save_avatar(
+                                avatar_url,
+                                user.id,
+                                username
+                            )
+                            if local_avatar_path:
+                                user.avatar = local_avatar_path
+                                user.save(update_fields=['avatar'])
+                                print(f"Successfully downloaded avatar for new OAuth user {username}: {local_avatar_path}")
+                            else:
+                                print(f"Failed to download avatar for new OAuth user {username}")
+                        except Exception as e:
+                            print(f"Error downloading avatar for new OAuth user {username}: {str(e)}")
                     
                     SocialAccount.objects.create(
                         user=user,
@@ -350,3 +364,122 @@ def google_oauth_url(request):
         return Response({
             'error': f'Failed to generate OAuth URL: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def google_oauth_callback(request):
+    """Handle Google OAuth callback and redirect to frontend."""
+    try:
+        # Get the authorization code from the callback
+        code = request.GET.get('code')
+        if not code:
+            # Redirect to frontend with error
+            frontend_url = settings.BASE_URL
+            return redirect(f"{frontend_url}/?oauth=error&message=No authorization code received")
+        
+        # Exchange the authorization code for an access token
+        from .google_oauth import exchange_code_for_token
+        access_token = exchange_code_for_token(code)
+        
+        # Use the existing social login logic
+        from .google_oauth import validate_google_oauth_token
+        google_user_info = validate_google_oauth_token(access_token)
+        
+        provider_user_id = google_user_info['provider_user_id']
+        email = google_user_info['email']
+        first_name = google_user_info['first_name']
+        last_name = google_user_info['last_name']
+        avatar_url = google_user_info.get('avatar_url', '')
+        
+        # Check if email is verified
+        if not google_user_info.get('email_verified', False):
+            frontend_url = settings.BASE_URL
+            return redirect(f"{frontend_url}/?oauth=error&message=Email not verified with Google")
+        
+        # Check if social account exists
+        try:
+            social_account = SocialAccount.objects.get(
+                provider='google',
+                provider_user_id=provider_user_id
+            )
+            user = social_account.user
+            
+            # Update social account tokens
+            social_account.access_token = access_token
+            social_account.save()
+            
+        except SocialAccount.DoesNotExist:
+            # Check if user with this email already exists
+            try:
+                user = User.objects.get(email=email)
+                
+                # Create social account for existing user
+                SocialAccount.objects.create(
+                    user=user,
+                    provider='google',
+                    provider_user_id=provider_user_id,
+                    access_token=access_token,
+                )
+                
+            except User.DoesNotExist:
+                # Create new user and social account
+                username = email.split('@')[0]  # Use email prefix as username
+                
+                # Ensure username is unique
+                base_username = username
+                counter = 1
+                while User.objects.filter(username=username).exists():
+                    username = f"{base_username}{counter}"
+                    counter += 1
+                
+                user = User.objects.create(
+                    email=email,
+                    username=username,
+                    first_name=first_name,
+                    last_name=last_name,
+                )
+                
+                # Download and save avatar immediately if provided
+                if avatar_url:
+                    try:
+                        from utils.avatar_downloader import download_and_save_avatar
+                        local_avatar_path = download_and_save_avatar(
+                            avatar_url,
+                            user.id,
+                            username
+                        )
+                        if local_avatar_path:
+                            user.avatar = local_avatar_path
+                            user.save(update_fields=['avatar'])
+                            print(f"Successfully downloaded avatar for new OAuth user {username}: {local_avatar_path}")
+                        else:
+                            print(f"Failed to download avatar for new OAuth user {username}")
+                    except Exception as e:
+                        print(f"Error downloading avatar for new OAuth user {username}: {str(e)}")
+                
+                SocialAccount.objects.create(
+                    user=user,
+                    provider='google',
+                    provider_user_id=provider_user_id,
+                    access_token=access_token,
+                )
+        
+        # Generate tokens
+        refresh = RefreshToken.for_user(user)
+        
+        # Serialize user data
+        user_data = UserProfileSerializer(user).data
+        
+        # Redirect to frontend with success and tokens
+        frontend_url = settings.BASE_URL
+        tokens_param = f"access={refresh.access_token}&refresh={str(refresh)}"
+        user_param = f"user={user_data['id']}"
+        
+        return redirect(f"{frontend_url}/?oauth=success&{tokens_param}&{user_param}")
+        
+    except Exception as e:
+        # Redirect to frontend with error
+        frontend_url = settings.BASE_URL
+        error_message = str(e).replace(' ', '%20')
+        return redirect(f"{frontend_url}/?oauth=error&message={error_message}")

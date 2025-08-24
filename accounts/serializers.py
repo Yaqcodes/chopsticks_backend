@@ -80,11 +80,21 @@ class UserLoginSerializer(serializers.Serializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     """Serializer for user profile management."""
     
+    # Custom avatar field that returns relative path instead of full URL
+    avatar = serializers.SerializerMethodField()
+    
     class Meta:
         model = User
         fields = ['id', 'email', 'username', 'first_name', 'last_name', 
                  'phone', 'avatar', 'date_of_birth', 'referral_code', 'date_joined']
         read_only_fields = ['id', 'referral_code', 'date_joined']
+    
+    def get_avatar(self, obj):
+        """Return avatar as relative path instead of full URL."""
+        if obj.avatar:
+            # Return the relative path (e.g., 'avatars/filename.jpg')
+            return obj.avatar.name if hasattr(obj.avatar, 'name') else str(obj.avatar)
+        return None
     
     def update(self, instance, validated_data):
         # Handle email uniqueness

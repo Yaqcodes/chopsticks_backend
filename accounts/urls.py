@@ -19,6 +19,7 @@ urlpatterns = [
     # Social authentication
     path('social/login/', views.SocialLoginView.as_view(), name='social_login'),
     path('google/oauth-url/', views.google_oauth_url, name='google_oauth_url'),
+    path('google/callback/', views.google_oauth_callback, name='google_oauth_callback'),
     
     # User referrals
     path('referrals/', views.user_referrals, name='user_referrals'),
