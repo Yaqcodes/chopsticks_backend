@@ -191,13 +191,13 @@ class PaystackWebhookView(View):
                     return HttpResponse('Missing reference', status=400)
                 
                 # Identify business from payment reference (webhooks don't have frontend headers)
-                    try:
-                        payment = Payment.objects.get(reference=reference)
+                try:
+                    payment = Payment.objects.get(reference=reference)
                     restaurant_settings = payment.order.restaurant_settings
                     logger.info(f"Identified business from webhook reference: {restaurant_settings.domain}")
-                    except Payment.DoesNotExist:
-                        logger.error("Payment not found for reference: %s", reference)
-                        return HttpResponse('Payment not found', status=404)
+                except Payment.DoesNotExist:
+                    logger.error("Payment not found for reference: %s", reference)
+                    return HttpResponse('Payment not found', status=404)
 
                 # Verify webhook signature using the identified business's secret
                 webhook_secret = restaurant_settings.paystack_webhook_secret or restaurant_settings.paystack_secret_key
@@ -213,23 +213,23 @@ class PaystackWebhookView(View):
                     logger.error("Invalid webhook signature for reference: %s", reference)
                     return HttpResponse('Invalid signature', status=400)
 
-                    # Update existing payment
-                    payment.status = 'success'
-                    payment.paystack_status = 'success'
-                    payment.verified_at = timezone.now()
-                    payment.save()
-                    
-                    # Update order
-                    order = payment.order
-                    order.payment_status = 'paid'
-                    order.payment_verified_at = timezone.now()
-                    order.save()
-                    
-                    # Award loyalty points
-                    if order.user:
-                        award_points_for_order(order)
-                    
-                    logger.info("Webhook processed successfully for reference: %s", reference)
+                # Update existing payment
+                payment.status = 'success'
+                payment.paystack_status = 'success'
+                payment.verified_at = timezone.now()
+                payment.save()
+                
+                # Update order
+                order = payment.order
+                order.payment_status = 'paid'
+                order.payment_verified_at = timezone.now()
+                order.save()
+                
+                # Award loyalty points
+                if order.user:
+                    award_points_for_order(order)
+                
+                logger.info("Webhook processed successfully for reference: %s", reference)
             
             return HttpResponse('OK', status=200)
             
