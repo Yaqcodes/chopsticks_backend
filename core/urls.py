@@ -10,4 +10,8 @@ urlpatterns = [
     path('health/', views.health_check, name='health_check'),
     path('status/', views.system_status, name='system_status'),
     path('user-guide/', views.user_guide, name='user_guide'),
+    # Quote endpoints
+    path('quotes/submit/', views.submit_quote, name='submit_quote'),
+    path('quotes/', views.QuoteListView.as_view(), name='quote_list'),
+    path('quotes/<int:pk>/', views.QuoteDetailView.as_view(), name='quote_detail'),
 ]

@@ -18,8 +18,11 @@ USE_I18N = True
 USE_L10N = True
 USE_TZ = True
 
-# Base URL for frontend
-BASE_URL = config('BASE_URL', default='http://localhost:5173')
+# Base URL for backend (used for callbacks, etc.)
+BACKEND_BASE_URL = config('BASE_URL', default='http://localhost:8000')
+
+# Base URL for frontend (used for redirects)
+FRONTEND_BASE_URL = config('FRONTEND_BASE_URL', default='http://localhost:5173')
 
 # Production frontend URLs
 PRODUCTION_FRONTEND_URLS = [
@@ -28,6 +31,9 @@ PRODUCTION_FRONTEND_URLS = [
     'https://chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app',
     'https://chopsticksandbowls.com',
     'https://www.chopsticksandbowls.com',
+    'roschi-water.vercel.app'
+    'https://www.roschiwater.com',
+    'https://roschiwater.com',
 ]
 
 # Environment Variables for Production (set these on PythonAnywhere):
@@ -46,7 +52,8 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,chopsticks-
 
 # Application definition
 INSTALLED_APPS = [
-    'unfold',  # Must come before django.contrib.admin
+    'unfold',  # Unfold must be before django.contrib.admin
+    'unfold.contrib.filters',  # Optional: Advanced filters
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -186,6 +193,7 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'ngrok-skip-browser-warning',  # Allow ngrok bypass header
 ]
 
 # Security settings for production
@@ -301,7 +309,7 @@ DEFAULT_TAX_RATE=config('TAX_RATE', default=0.075, cast=float)
 # Paystack payment settings
 PAYSTACK_SECRET_KEY = config('PAYSTACK_SECRET_KEY_TEST', default='')
 PAYSTACK_PUBLIC_KEY = config('PAYSTACK_PUBLIC_KEY_TEST', default='')
-PAYSTACK_CALLBACK_URL = BASE_URL + '/payment/callback'
+PAYSTACK_CALLBACK_URL = BACKEND_BASE_URL + '/api/payments/callback/'
 PAYSTACK_BASE_URL = config('PAYSTACK_BASE_URL', default='https://api.paystack.co')
 
 # Django Unfold settings
@@ -315,4 +323,63 @@ UNFOLD = {
     "SCRIPTS": [
         lambda request: "/static/js/custom-admin.js",
     ],
+    "COLORS": {
+        "primary": {
+            "50": "250 245 255",
+            "100": "243 232 255",
+            "200": "233 213 255",
+            "300": "216 180 254",
+            "400": "192 132 252",
+            "500": "168 85 247",
+            "600": "147 51 234",
+            "700": "126 34 206",
+            "800": "107 33 168",
+            "900": "88 28 135",
+            "950": "59 7 100",
+        },
+    },
+}
+
+# Roschi Water Unfold settings (for custom admin site)
+ROSCHI_UNFOLD = {
+    "SITE_TITLE": "Roschi Water Admin",
+    "SITE_HEADER": "Roschi Water",
+    "SITE_URL": "/roschi-admin/",
+    "COLORS": {
+        "primary": {
+            "50": "240 249 255",  # Water blue shades
+            "100": "224 242 254",
+            "200": "186 230 253",
+            "300": "125 211 252",
+            "400": "56 189 248",
+            "500": "14 165 233",  # Primary water blue
+            "600": "2 132 199",   # Darker blue
+            "700": "3 105 161",
+            "800": "7 89 133",
+            "900": "12 74 110",
+            "950": "8 47 73",
+        },
+    },
+}
+
+# Chopsticks & Bowls Unfold settings (for custom admin site)
+CHOPSTICKS_UNFOLD = {
+    "SITE_TITLE": "Chopsticks & Bowls Admin",
+    "SITE_HEADER": "Chopsticks & Bowls",
+    "SITE_URL": "/cb-admin/",
+    "COLORS": {
+        "primary": {
+            "50": "250 245 255",  # Purple shades (matching main UNFOLD)
+            "100": "243 232 255",
+            "200": "233 213 255",
+            "300": "216 180 254",
+            "400": "192 132 252",
+            "500": "168 85 247",
+            "600": "147 51 234",
+            "700": "126 34 206",
+            "800": "107 33 168",
+            "900": "88 28 135",
+            "950": "59 7 100",
+        },
+    },
 }

@@ -20,6 +20,14 @@ class User(AbstractUser):
     referral_code = models.CharField(max_length=8, unique=True, default=generate_referral_code)
     referred_by = models.ForeignKey('self', on_delete=models.SET_NULL, blank=True, null=True, related_name='referrals')
     
+    # Business linkage for multi-tenant admin access
+    businesses = models.ManyToManyField(
+        'core.RestaurantSettings',
+        related_name='staff_users',
+        blank=True,
+        help_text="Businesses this user can manage. Superusers can access all businesses."
+    )
+    
     # Override email field to be unique
     email = models.EmailField(unique=True)
     
@@ -46,6 +54,36 @@ class User(AbstractUser):
     def full_name(self):
         """Return the user's full name."""
         return f"{self.first_name} {self.last_name}".strip() or self.email
+    
+    def has_business_access(self, restaurant_settings):
+        """
+        Check if user has access to a specific business.
+        
+        Args:
+            restaurant_settings: RestaurantSettings instance or ID
+            
+        Returns:
+            bool: True if user is superuser or linked to the business
+        """
+        if self.is_superuser:
+            return True
+        
+        if isinstance(restaurant_settings, int):
+            return self.businesses.filter(id=restaurant_settings).exists()
+        
+        return self.businesses.filter(id=restaurant_settings.id).exists()
+    
+    def get_accessible_businesses(self):
+        """
+        Get all businesses this user can access.
+        
+        Returns:
+            QuerySet: RestaurantSettings queryset
+        """
+        if self.is_superuser:
+            from core.models import RestaurantSettings
+            return RestaurantSettings.objects.all()
+        return self.businesses.all()
 
 
 class SocialAccount(models.Model):

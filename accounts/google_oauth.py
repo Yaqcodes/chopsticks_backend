@@ -4,6 +4,7 @@ Google OAuth utility functions for validating Google OAuth tokens.
 
 import json
 import requests
+from urllib.parse import urlencode
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from google.auth.transport import requests as google_requests
@@ -88,15 +89,17 @@ def get_google_oauth_url():
     redirect_uri = f"{settings.OAUTH_BASE_URL}/api/auth/google/callback/"
     scope = "openid email profile"
     
-    return (
-        f"https://accounts.google.com/o/oauth2/v2/auth?"
-        f"client_id={client_id}&"
-        f"redirect_uri={redirect_uri}&"
-        f"response_type=code&"
-        f"scope={scope}&"
-        f"access_type=offline&"
-        f"prompt=consent"
-    )
+    # Build query parameters with proper URL encoding
+    params = {
+        'client_id': client_id,
+        'redirect_uri': redirect_uri,
+        'response_type': 'code',
+        'scope': scope,
+        'access_type': 'offline',
+        'prompt': 'consent'
+    }
+    
+    return f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
 
 
 def exchange_code_for_token(authorization_code):

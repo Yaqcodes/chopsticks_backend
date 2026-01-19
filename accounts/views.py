@@ -375,7 +375,7 @@ def google_oauth_callback(request):
         code = request.GET.get('code')
         if not code:
             # Redirect to frontend with error
-            frontend_url = settings.BASE_URL
+            frontend_url = settings.FRONTEND_BASE_URL
             return redirect(f"{frontend_url}/?oauth=error&message=No authorization code received")
         
         # Exchange the authorization code for an access token
@@ -394,7 +394,7 @@ def google_oauth_callback(request):
         
         # Check if email is verified
         if not google_user_info.get('email_verified', False):
-            frontend_url = settings.BASE_URL
+            frontend_url = settings.FRONTEND_BASE_URL
             return redirect(f"{frontend_url}/?oauth=error&message=Email not verified with Google")
         
         # Check if social account exists
@@ -472,7 +472,7 @@ def google_oauth_callback(request):
         user_data = UserProfileSerializer(user).data
         
         # Redirect to frontend with success and tokens
-        frontend_url = settings.BASE_URL
+        frontend_url = settings.FRONTEND_BASE_URL
         tokens_param = f"access={refresh.access_token}&refresh={str(refresh)}"
         user_param = f"user={user_data['id']}"
         
@@ -480,6 +480,6 @@ def google_oauth_callback(request):
         
     except Exception as e:
         # Redirect to frontend with error
-        frontend_url = settings.BASE_URL
+        frontend_url = settings.FRONTEND_BASE_URL
         error_message = str(e).replace(' ', '%20')
         return redirect(f"{frontend_url}/?oauth=error&message={error_message}")

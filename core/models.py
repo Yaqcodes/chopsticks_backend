@@ -61,6 +61,20 @@ class RestaurantSettings(models.Model):
     instagram_url = models.URLField(blank=True, default="https://instagram.com/chop.sticksandbowls")
     twitter_url = models.URLField(blank=True)
     
+    # Domain Identification
+    domain = models.CharField(
+        max_length=200,
+        unique=True,
+        blank=True,
+        null=True,
+        help_text="Frontend domain used for business identification (e.g., roschiwater.com). This is the domain where customers access the website, not the backend API domain. Used to identify which business a request belongs to in a shared backend architecture.",
+    )
+
+    # Paystack Configuration
+    paystack_secret_key = models.CharField(max_length=255, blank=True)
+    paystack_public_key = models.CharField(max_length=255, blank=True)
+    paystack_webhook_secret = models.CharField(max_length=255, blank=True)
+
     # Branding
     logo = models.ImageField(upload_to='restaurant/', blank=True, null=True)
     favicon = models.ImageField(upload_to='restaurant/', blank=True, null=True)
@@ -92,8 +106,8 @@ class RestaurantSettings(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "Restaurant Settings"
-        verbose_name_plural = "Restaurant Settings"
+        verbose_name = "Business Settings"
+        verbose_name_plural = "Business Settings"
 
     def __str__(self):
         return f"{self.name} Settings"
@@ -121,6 +135,25 @@ class RestaurantSettings(models.Model):
 
     @classmethod
     def get_settings(cls):
+        """
+        DEPRECATED: This method always returns id=1 and breaks multi-tenancy.
+        
+        DO NOT USE THIS METHOD. It violates multi-tenant architecture by always
+        returning the same RestaurantSettings regardless of domain.
+        
+        Use get_business_from_request(request) from core.utils instead for
+        proper domain-based business identification.
+        
+        This method is kept only for backward compatibility with legacy code
+        and will be removed in a future version.
+        """
+        import warnings
+        warnings.warn(
+            "RestaurantSettings.get_settings() is deprecated and breaks multi-tenancy. "
+            "Use get_business_from_request(request) instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         restaurant_settings, created = cls.objects.get_or_create(
             id=1,
             defaults={
@@ -150,9 +183,21 @@ class RestaurantSettings(models.Model):
         return restaurant_settings
 
     @classmethod
-    def get_delivery_settings(cls):
-        """Returns delivery-related settings as a dictionary"""
-        restaurant_settings = cls.get_settings()
+    def get_delivery_settings(cls, restaurant_settings):
+        """
+        Returns delivery-related settings as a dictionary.
+        
+        Args:
+            restaurant_settings (RestaurantSettings): REQUIRED - Business settings for multi-tenant support
+        
+        Returns:
+            dict: Delivery-related settings
+        
+        Raises:
+            ValueError: If restaurant_settings is not provided
+        """
+        if not restaurant_settings:
+            raise ValueError("restaurant_settings is required for multi-tenant delivery settings")
         return {
             'pickup_delivery_fee': restaurant_settings.pickup_delivery_fee,
             'delivery_fee_base': restaurant_settings.delivery_fee_base,
@@ -161,3 +206,63 @@ class RestaurantSettings(models.Model):
             'minimum_order': restaurant_settings.minimum_order,
             'free_delivery_threshold': restaurant_settings.free_delivery_threshold,
         }
+
+
+class Quote(TimeStampedModel):
+    """Quote request model for customer inquiries."""
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('reviewed', 'Reviewed'),
+        ('responded', 'Responded'),
+        ('closed', 'Closed'),
+    ]
+    
+    # Business association (multi-tenant)
+    restaurant_settings = models.ForeignKey(
+        RestaurantSettings,
+        on_delete=models.CASCADE,
+        related_name='quotes',
+        help_text="Business this quote belongs to"
+    )
+    
+    # Customer information
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    email = models.EmailField()
+    phone = models.CharField(max_length=20, blank=True)
+    
+    # Quote details
+    message = models.TextField()
+    
+    # Status tracking
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        help_text="Current status of the quote request"
+    )
+    
+    # Admin notes (internal use only)
+    admin_notes = models.TextField(
+        blank=True,
+        help_text="Internal notes for admin use"
+    )
+    
+    class Meta:
+        verbose_name = 'Quote Request'
+        verbose_name_plural = 'Quote Requests'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at']),
+            models.Index(fields=['status']),
+            models.Index(fields=['restaurant_settings', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"Quote from {self.first_name} {self.last_name} - {self.created_at.strftime('%Y-%m-%d')}"
+    
+    @property
+    def full_name(self):
+        """Get customer's full name."""
+        return f"{self.first_name} {self.last_name}"

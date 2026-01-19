@@ -1,5 +1,7 @@
 from django.db import models
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MinValueValidator
+
+from core.models import RestaurantSettings
 
 
 class Category(models.Model):
@@ -14,7 +16,8 @@ class Category(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        verbose_name_plural = 'Categories'
+        verbose_name = 'Product Category'
+        verbose_name_plural = 'Product Categories'
         ordering = ['sort_order', 'name']
     
     def __str__(self):
@@ -36,8 +39,18 @@ class MenuItem(models.Model):
     
     name = models.CharField(max_length=200)
     description = models.TextField()
+    size = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Product size/variant (e.g., '24-pack 35cl', 'Pure Water')",
+    )
     price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='menu_items')
+    restaurant_settings = models.ForeignKey(
+        RestaurantSettings,
+        on_delete=models.CASCADE,
+        related_name='menu_items',
+    )
     image = models.ImageField(upload_to='menu_items/', blank=True, null=True)
     badges = models.JSONField(default=list, blank=True)  # Store badge types as list
     allergens = models.JSONField(default=list, blank=True)  # Store allergen list
@@ -45,11 +58,18 @@ class MenuItem(models.Model):
     is_available = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
     preparation_time = models.PositiveIntegerField(default=15, help_text='Preparation time in minutes')
+    sku = models.PositiveIntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        help_text='Stock Keeping Unit - available quantity',
+    )
     sort_order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        verbose_name = 'Product'
+        verbose_name_plural = 'Products'
         ordering = ['category', 'sort_order', 'name']
     
     def __str__(self):

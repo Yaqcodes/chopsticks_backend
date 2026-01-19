@@ -21,6 +21,8 @@ from django.conf.urls.static import static
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+from core.admin_sites import roschi_admin_site, chopsticks_admin_site
+from core.main_admin_site import main_admin_site
 
 # Swagger/OpenAPI Schema
 schema_view = get_schema_view(
@@ -40,8 +42,12 @@ urlpatterns = [
     # Root redirect to user guide
     path('', include('core.urls')),
     
-    # Admin interface
-    path('admin/', admin.site.urls),
+    # Main admin interface (superusers only)
+    path('admin/', main_admin_site.urls),
+    
+    # Business-specific admin interfaces
+    path('roschi-admin/', roschi_admin_site.urls),
+    path('cb-admin/', chopsticks_admin_site.urls),
     
     # Loyalty admin routes
     path('admin-qr/', include('loyalty.admin_urls')),
@@ -75,7 +81,4 @@ if not settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
-# Admin site customization
-admin.site.site_title = "Chopsticks & Bowls Admin"
-admin.site.site_header = "Chopsticks & Bowls"
-admin.site.index_title = "Welcome to Chopsticks & Bowls Administration"
+# Main admin site is already configured in core/main_admin_site.py

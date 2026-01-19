@@ -51,6 +51,11 @@ class Order(models.Model):
     # Order identification
     order_number = models.CharField(max_length=20, unique=True, default=generate_order_number)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='orders', null=True, blank=True)
+    restaurant_settings = models.ForeignKey(
+        RestaurantSettings,
+        on_delete=models.CASCADE,
+        related_name='orders',
+    )
     
     # Customer information (for guest orders)
     guest_email = models.EmailField(blank=True, null=True)
@@ -85,6 +90,8 @@ class Order(models.Model):
     payment_verified_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp when payment was verified")
     
     class Meta:
+        verbose_name = 'Order'
+        verbose_name_plural = 'Orders'
         ordering = ['-created_at']
     
     def __str__(self):
@@ -110,12 +117,10 @@ class Order(models.Model):
             self.subtotal = sum(item.total_price for item in self.items.all())
         
         if not self.tax_amount:
-            # Calculate tax
-            try:
-                settings = RestaurantSettings.get_settings()
-                vat_rate = settings.vat_rate
-            except Exception:
-                vat_rate = Decimal('0.075')  # Default 7.5% VAT
+            # Calculate tax using order's restaurant_settings
+            if not self.restaurant_settings:
+                raise ValueError("Order must have restaurant_settings to calculate tax")
+            vat_rate = self.restaurant_settings.vat_rate
             self.tax_amount = self.subtotal * vat_rate
         
         if not self.total_amount:
@@ -147,13 +152,9 @@ class Order(models.Model):
     
     def calculate_totals(self):
         """Calculate order totals including tax and delivery fees."""
-        try:
-            settings = RestaurantSettings.get_settings()
-            vat_rate = settings.vat_rate
-        except Exception:
-            # Fallback to Django settings if RestaurantSettings fails
-            from django.conf import settings as django_settings
-            vat_rate = Decimal(str(getattr(django_settings, 'TAX_RATE', 0.08)))
+        if not self.restaurant_settings:
+            raise ValueError("Order must have restaurant_settings to calculate totals")
+        vat_rate = self.restaurant_settings.vat_rate
         
         # Calculate subtotal
         subtotal = sum(item.total_price for item in self.items.all())
@@ -189,6 +190,10 @@ class OrderItem(models.Model):
     
     def __str__(self):
         return f"{self.quantity}x {self.menu_item.name} - {self.order.order_number}"
+    
+    class Meta:
+        verbose_name = 'Order Item'
+        verbose_name_plural = 'Order Items'
     
     def save(self, *args, **kwargs):
         if not self.total_price:

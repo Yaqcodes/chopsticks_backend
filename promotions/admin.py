@@ -1,10 +1,9 @@
 from django.contrib import admin
-from unfold.admin import ModelAdmin as UnfoldModelAdmin
 from .models import PromoCode, PromoCodeUsage
 
 
 @admin.register(PromoCode)
-class PromoCodeAdmin(UnfoldModelAdmin):
+class PromoCodeAdmin(admin.ModelAdmin):
     """Admin interface for PromoCode model."""
     
     list_display = [
@@ -44,7 +43,7 @@ class PromoCodeAdmin(UnfoldModelAdmin):
 
 
 @admin.register(PromoCodeUsage)
-class PromoCodeUsageAdmin(UnfoldModelAdmin):
+class PromoCodeUsageAdmin(admin.ModelAdmin):
     """Admin interface for PromoCodeUsage model."""
     
     list_display = [

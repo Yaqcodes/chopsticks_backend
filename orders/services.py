@@ -9,7 +9,7 @@ from utils.geocoding import calculate_distance
 from core.models import RestaurantSettings
 
 
-def calculate_delivery_fee(delivery_type, distance_km=None, subtotal=None):
+def calculate_delivery_fee(delivery_type, distance_km=None, subtotal=None, restaurant_settings=None):
     """
     Calculate delivery fee based on delivery type and distance.
     
@@ -17,12 +17,18 @@ def calculate_delivery_fee(delivery_type, distance_km=None, subtotal=None):
         delivery_type (str): 'delivery' or 'pickup'
         distance_km (float): Distance in kilometers for delivery
         subtotal (Decimal): Order subtotal for free delivery threshold
+        restaurant_settings (RestaurantSettings): REQUIRED - Business settings for multi-tenant support
         
     Returns:
         Decimal: Calculated delivery fee
+    
+    Raises:
+        ValueError: If restaurant_settings is not provided
     """
+    if not restaurant_settings:
+        raise ValueError("restaurant_settings is required for multi-tenant delivery fee calculation")
     try:
-        settings = RestaurantSettings.get_settings()
+        settings = restaurant_settings
         
         if delivery_type == 'pickup':
             return settings.pickup_delivery_fee
@@ -47,8 +53,14 @@ def calculate_delivery_fee(delivery_type, distance_km=None, subtotal=None):
         return max(delivery_fee, Decimal('0.00'))
 
 
-def calculate_cart_totals(cart_items, delivery_type='delivery', delivery_fee=Decimal('0.00'), 
-                          promo_code=None, user_reward=None):
+def calculate_cart_totals(
+    cart_items,
+    delivery_type='delivery',
+    delivery_fee=Decimal('0.00'),
+    promo_code=None,
+    user_reward=None,
+    restaurant_settings=None,
+):
     """
     Calculate complete cart totals including tax and delivery fees.
     
@@ -58,16 +70,17 @@ def calculate_cart_totals(cart_items, delivery_type='delivery', delivery_fee=Dec
         delivery_fee (Decimal): Delivery fee amount (0 for pickup orders)
         promo_code (str): Promotional code for discount
         user_reward (UserReward): Selected UserReward object for discount calculation
+        restaurant_settings (RestaurantSettings): REQUIRED - Business settings for multi-tenant support
         
     Returns:
         dict: Complete totals breakdown
+    
+    Raises:
+        ValueError: If restaurant_settings is not provided
     """
-    try:
-        settings = RestaurantSettings.get_settings()
-        vat_rate = settings.vat_rate
-    except Exception:
-        # Fallback to Django settings if RestaurantSettings fails
-        vat_rate = Decimal(str(django_settings.DEFAULT_TAX_RATE))
+    if not restaurant_settings:
+        raise ValueError("restaurant_settings is required for multi-tenant cart totals calculation")
+    vat_rate = restaurant_settings.vat_rate
     
     # Calculate subtotal
     subtotal = sum(item['price'] * item['quantity'] for item in cart_items)
@@ -126,10 +139,7 @@ def calculate_cart_totals(cart_items, delivery_type='delivery', delivery_fee=Dec
     discount_amount = discount_amount + total_reward_discount
     final_total = total - discount_amount
     if final_total < django_settings.MINIMUM_ORDER_AMOUNT:
-        try:
-            final_total = settings.minimum_order
-        except Exception:
-            final_total = django_settings.MINIMUM_ORDER_AMOUNT
+        final_total = restaurant_settings.minimum_order
     
     return {
         'subtotal': subtotal,
@@ -155,7 +165,8 @@ def process_order_payment(order, payment_method, payment_data=None):
         # Redirect to Paystack for online payments
         from payments.services import PaystackService
         try:
-            paystack = PaystackService()
+            restaurant_settings = order.restaurant_settings
+            paystack = PaystackService(secret_key=restaurant_settings.paystack_secret_key)
             result = paystack.initialize_transaction(
                 email=order.get_customer_email(),
                 amount_kobo=order.get_paystack_amount(),

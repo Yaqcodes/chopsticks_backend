@@ -1,21 +1,22 @@
 import json
 import logging
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseRedirect
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
+from core.utils import get_business_from_request
 from .models import Payment
 from .services import PaystackService, PaystackError, PaystackAPIError, PaystackVerificationError
 from orders.models import Order
 from loyalty.services import award_points_for_order
-from django.conf import settings
 from .services import kobo_to_naira
 
 logger = logging.getLogger(__name__)
@@ -26,12 +27,15 @@ logger = logging.getLogger(__name__)
 def initialize_payment(request):
     """Initialize payment for an order."""
     try:
+        restaurant_settings = get_business_from_request(request)
         order_id = request.data.get('order_id')
         if not order_id:
             return Response({'error': 'order_id is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Get the order
         order = get_object_or_404(Order, id=order_id)
+        if order.restaurant_settings != restaurant_settings:
+            return Response({'error': 'Order does not belong to this business'}, status=status.HTTP_403_FORBIDDEN)
         
         # Check if order is pending payment
         if order.payment_status != 'pending':
@@ -43,13 +47,23 @@ def initialize_payment(request):
                 return Response({'error': 'You can only pay for your own orders'}, status=status.HTTP_403_FORBIDDEN)
         # For guest orders, no user verification needed
         
+        if not restaurant_settings.paystack_secret_key:
+            return Response({'error': 'Paystack secret key not configured for this business'}, status=status.HTTP_400_BAD_REQUEST)
+        if not restaurant_settings.paystack_public_key:
+            return Response({'error': 'Paystack public key not configured for this business'}, status=status.HTTP_400_BAD_REQUEST)
+
+        callback_url = request.build_absolute_uri('/api/payments/callback/')
+
         # Initialize Paystack transaction
-        paystack = PaystackService()
+        paystack = PaystackService(
+            secret_key=restaurant_settings.paystack_secret_key,
+            public_key=restaurant_settings.paystack_public_key,
+        )
         result = paystack.initialize_transaction(
             email=order.get_customer_email(),
             amount_kobo=order.get_paystack_amount(),
             order_number=order.order_number,
-            callback_url=settings.PAYSTACK_CALLBACK_URL
+            callback_url=callback_url
         )
         
         # Create Payment record
@@ -71,7 +85,8 @@ def initialize_payment(request):
         return Response({
             'authorization_url': result['authorization_url'],
             'reference': result['reference'],
-            'access_code': result['access_code']
+            'access_code': result['access_code'],
+            'public_key': restaurant_settings.paystack_public_key
         })
         
     except PaystackAPIError as e:
@@ -87,11 +102,17 @@ def initialize_payment(request):
 def verify_payment(request, reference):
     """Verify payment status."""
     try:
+        restaurant_settings = get_business_from_request(request)
         # Get payment record
         payment = get_object_or_404(Payment, reference=reference)
+        if payment.order.restaurant_settings != restaurant_settings:
+            return Response({'error': 'Payment does not belong to this business'}, status=status.HTTP_403_FORBIDDEN)
         
+        if not restaurant_settings.paystack_secret_key:
+            return Response({'error': 'Paystack secret key not configured for this business'}, status=status.HTTP_400_BAD_REQUEST)
+
         # Verify with Paystack
-        paystack = PaystackService()
+        paystack = PaystackService(secret_key=restaurant_settings.paystack_secret_key)
         result = paystack.verify_transaction(reference)
         
         # Update payment status
@@ -142,13 +163,20 @@ class PaystackWebhookView(View):
     
     def post(self, request, *args, **kwargs):
         try:
+            restaurant_settings = get_business_from_request(request)
             # Get webhook signature
             signature = request.headers.get('X-Paystack-Signature')
             if not signature:
                 return HttpResponse('Missing signature', status=400)
             
             # Verify webhook signature
-            paystack = PaystackService()
+            webhook_secret = restaurant_settings.paystack_webhook_secret or restaurant_settings.paystack_secret_key
+            if not restaurant_settings.paystack_secret_key:
+                return HttpResponse('Paystack secret key not configured for this business', status=400)
+            paystack = PaystackService(
+                secret_key=restaurant_settings.paystack_secret_key,
+                webhook_secret=webhook_secret,
+            )
             if not paystack.verify_webhook_signature(request.body.decode('utf-8'), signature):
                 return HttpResponse('Invalid signature', status=400)
             
@@ -162,39 +190,32 @@ class PaystackWebhookView(View):
                 reference = transaction_data.get('reference')
                 
                 if reference:
-                    # Get or create payment record
-                    payment, created = Payment.objects.get_or_create(
-                        reference=reference,
-                        defaults={
-                            'order': None,  # Will be set below
-                            'amount': kobo_to_naira(transaction_data.get('amount', 0)),
-                            'amount_kobo': transaction_data.get('amount', 0),
-                            'customer_email': transaction_data.get('customer', {}).get('email', ''),
-                            'status': 'success',
-                            'paystack_status': 'success',
-                            'verified_at': timezone.now()
-                        }
-                    )
+                    try:
+                        payment = Payment.objects.get(reference=reference)
+                    except Payment.DoesNotExist:
+                        logger.error("Payment not found for reference: %s", reference)
+                        return HttpResponse('Payment not found', status=404)
+
+                    if payment.order.restaurant_settings != restaurant_settings:
+                        return HttpResponse('Payment does not belong to this business', status=403)
+
+                    # Update existing payment
+                    payment.status = 'success'
+                    payment.paystack_status = 'success'
+                    payment.verified_at = timezone.now()
+                    payment.save()
                     
-                    if not created:
-                        # Update existing payment
-                        payment.status = 'success'
-                        payment.paystack_status = 'success'
-                        payment.verified_at = timezone.now()
-                        payment.save()
+                    # Update order
+                    order = payment.order
+                    order.payment_status = 'paid'
+                    order.payment_verified_at = timezone.now()
+                    order.save()
                     
-                    # Update order if payment exists
-                    if payment.order:
-                        order = payment.order
-                        order.payment_status = 'paid'
-                        order.payment_verified_at = timezone.now()
-                        order.save()
-                        
-                        # Award loyalty points
-                        if order.user:
-                            award_points_for_order(order)
+                    # Award loyalty points
+                    if order.user:
+                        award_points_for_order(order)
                     
-                    logger.info(f"Webhook processed successfully for reference: {reference}")
+                    logger.info("Webhook processed successfully for reference: %s", reference)
             
             return HttpResponse('OK', status=200)
             
@@ -205,30 +226,50 @@ class PaystackWebhookView(View):
             return HttpResponse('Internal error', status=500)
 
 
-@api_view(['GET'])
-@permission_classes([AllowAny])
+@csrf_exempt
 def payment_callback(request):
     """
     Handle Paystack payment callback redirects.
     This is called when users are redirected back from Paystack after payment.
+    Note: Using regular Django view instead of @api_view to properly handle redirects.
     """
     try:
+        logger.info(f"Payment callback received. Host: {request.get_host()}, Path: {request.path}, Query: {request.GET}")
+        
+        try:
+            restaurant_settings = get_business_from_request(request)
+        except ValueError as e:
+            logger.error(f"Business identification failed: {str(e)}")
+            # Multi-tenancy is strict - no fallbacks allowed
+            raise ValueError(f"Cannot process payment: {str(e)}")
         # Get reference from query parameters
         reference = request.GET.get('reference')
         trxref = request.GET.get('trxref')
         
+        logger.info(f"Payment callback - reference: {reference}, trxref: {trxref}")
+        
         if not reference:
-            return Response({
+            logger.warning("Payment callback missing reference parameter")
+            return JsonResponse({
                 'error': 'Missing payment reference',
                 'message': 'Payment reference not found in callback'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            }, status=400)
         
         # Verify the payment
-        paystack = PaystackService()
+        if not restaurant_settings.paystack_secret_key:
+            logger.error("Paystack secret key not configured")
+            return JsonResponse({'error': 'Paystack secret key not configured for this business'}, status=400)
+        
+        logger.info(f"Verifying payment with reference: {reference}")
+        paystack = PaystackService(secret_key=restaurant_settings.paystack_secret_key)
         result = paystack.verify_transaction(reference)
+        logger.info(f"Payment verification result: {result.get('status')}")
         
         # Get payment record
         payment = get_object_or_404(Payment, reference=reference)
+        if payment.order.restaurant_settings != restaurant_settings:
+            logger.error(f"Payment {reference} does not belong to business {restaurant_settings.domain}")
+            return JsonResponse({'error': 'Payment does not belong to this business'}, status=403)
         
         # Update payment status
         payment.paystack_status = result.get('status', '')
@@ -244,27 +285,70 @@ def payment_callback(request):
             if payment.order.user:
                 award_points_for_order(payment.order)
             
-            return Response({
-                'status': 'success',
-                'message': 'Payment completed successfully',
-                'order_number': payment.order.order_number,
-                'amount': str(payment.amount),
-                'reference': reference
-            })
+            # Redirect to frontend success page
+            # Determine frontend URL based on domain or use default
+            frontend_url = getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5173')
+            
+            # For multi-tenant: if this is Roschi Water domain, use Roschi frontend URL
+            # Otherwise use default or domain-based logic
+            host = request.get_host().split(':')[0].lower()
+            logger.info(f"Determining frontend URL. Host: {host}, Current frontend_url: {frontend_url}")
+            
+            if 'roschi' in host or 'roschiwater' in host:
+                frontend_url = getattr(settings, 'ROSCHI_FRONTEND_URL', getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5173'))
+            elif 'chopsticks' in host:
+                frontend_url = getattr(settings, 'CHOPSTICKS_FRONTEND_URL', frontend_url)
+            
+            # Ensure URL is absolute and properly formatted
+            frontend_url = frontend_url.rstrip('/')
+            redirect_url = f"{frontend_url}/payment/success?reference={reference}"
+            logger.info(f"Payment successful. Redirecting to frontend: {redirect_url} (from host: {host}, frontend_url setting: {frontend_url})")
+            
+            # Create redirect response
+            response = HttpResponseRedirect(redirect_url)
+            logger.info(f"Redirect response created: {response.status_code}, Location: {response.get('Location', 'N/A')}")
+            return response
         else:
             payment.status = 'failed'
             payment.order.payment_status = 'failed'
             payment.order.save()
             
-            return Response({
-                'status': 'failed',
-                'message': 'Payment verification failed',
-                'reference': reference
-            }, status=status.HTTP_400_BAD_REQUEST)
+            # Redirect to frontend success page with failed status
+            frontend_url = getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5173')
+            
+            # For multi-tenant: if this is Roschi Water domain, use Roschi frontend URL
+            host = request.get_host().split(':')[0].lower()
+            if 'roschi' in host or 'roschiwater' in host:
+                frontend_url = getattr(settings, 'ROSCHI_FRONTEND_URL', getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5173'))
+            elif 'chopsticks' in host:
+                frontend_url = getattr(settings, 'CHOPSTICKS_FRONTEND_URL', frontend_url)
+            
+            # Ensure URL is absolute and properly formatted
+            frontend_url = frontend_url.rstrip('/')
+            redirect_url = f"{frontend_url}/payment/success?reference={reference}&status=failed"
+            logger.info(f"Payment failed. Redirecting to frontend: {redirect_url} (from host: {host})")
+            return HttpResponseRedirect(redirect_url)
             
     except Exception as e:
-        logger.error(f"Payment callback error: {str(e)}")
-        return Response({
+        logger.error(f"Payment callback error: {str(e)}", exc_info=True)
+        # Even on error, try to redirect to frontend with error status
+        reference = request.GET.get('reference', '')
+        if reference:
+            try:
+                frontend_url = getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5173')
+                host = request.get_host().split(':')[0].lower()
+                if 'roschi' in host or 'roschiwater' in host:
+                    frontend_url = getattr(settings, 'ROSCHI_FRONTEND_URL', getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5173'))
+                elif 'chopsticks' in host:
+                    frontend_url = getattr(settings, 'CHOPSTICKS_FRONTEND_URL', frontend_url)
+                frontend_url = frontend_url.rstrip('/')
+                redirect_url = f"{frontend_url}/payment/success?reference={reference}&error=1"
+                logger.info(f"Error occurred, redirecting to frontend: {redirect_url}")
+                return HttpResponseRedirect(redirect_url)
+            except Exception as redirect_error:
+                logger.error(f"Failed to redirect on error: {str(redirect_error)}")
+        
+        return JsonResponse({
             'error': 'Payment callback processing failed',
             'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        }, status=500)

@@ -9,6 +9,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from decimal import Decimal
 from datetime import datetime
 
+from core.utils import get_business_from_request
 from .models import Order, OrderItem
 from .serializers import (
     OrderSerializer, OrderListSerializer, OrderDetailSerializer,
@@ -37,7 +38,18 @@ class OrderListView(generics.ListAPIView):
         if getattr(self, 'swagger_fake_view', False):
             return Order.objects.none()
         
-        queryset = Order.objects.filter(user=self.request.user)
+        restaurant_settings = get_business_from_request(self.request)
+        user = self.request.user
+        
+        # Get orders for authenticated user - include both:
+        # 1. Orders where user field matches
+        # 2. Guest orders where email matches user's email (for orders placed before login)
+        from django.db.models import Q
+        queryset = Order.objects.filter(
+            restaurant_settings=restaurant_settings,
+        ).filter(
+            Q(user=user) | Q(guest_email=user.email)
+        )
         
         # Handle date filtering manually
         date_from = self.request.query_params.get('date_from')
@@ -72,7 +84,11 @@ class OrderDetailView(generics.RetrieveAPIView):
         # Handle Swagger schema generation
         if getattr(self, 'swagger_fake_view', False):
             return Order.objects.none()
-        return Order.objects.filter(user=self.request.user)
+        restaurant_settings = get_business_from_request(self.request)
+        return Order.objects.filter(
+            user=self.request.user,
+            restaurant_settings=restaurant_settings,
+        )
 
 
 class AdminOrderListView(generics.ListAPIView):
@@ -94,7 +110,8 @@ class AdminOrderListView(generics.ListAPIView):
         if not self.request.user.is_staff:
             return Order.objects.none()
         
-        queryset = Order.objects.all()
+        restaurant_settings = get_business_from_request(self.request)
+        queryset = Order.objects.filter(restaurant_settings=restaurant_settings)
         
         # Handle date filtering manually
         date_from = self.request.query_params.get('date_from')
@@ -174,7 +191,13 @@ def create_order(request):
 def cancel_order(request, order_id):
     """Cancel an order."""
     
-    order = get_object_or_404(Order, id=order_id, user=request.user)
+    restaurant_settings = get_business_from_request(request)
+    order = get_object_or_404(
+        Order, 
+        id=order_id, 
+        user=request.user,
+        restaurant_settings=restaurant_settings
+    )
     
     # Check if order can be cancelled
     if order.status in ['delivered', 'cancelled', 'refunded']:
@@ -197,8 +220,13 @@ def cancel_order(request, order_id):
 def order_tracking(request, order_number):
     """Track an order by order number."""
     
+    restaurant_settings = get_business_from_request(request)
+    
     try:
-        order = Order.objects.get(order_number=order_number)
+        order = Order.objects.get(
+            order_number=order_number,
+            restaurant_settings=restaurant_settings
+        )
     except Order.DoesNotExist:
         return Response({
             'error': 'Order not found.'
@@ -257,12 +285,14 @@ def calculate_cart_totals_view(request):
             }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
+        restaurant_settings = get_business_from_request(request)
         totals = calculate_cart_totals(
             cart_items=cart_items_with_prices,
             delivery_type=validated_data['delivery_type'],
             delivery_fee=validated_data['delivery_fee'],
             promo_code=validated_data.get('promotion_code'),
-            user_reward=user_reward
+            user_reward=user_reward,
+            restaurant_settings=restaurant_settings
         )
 
         
@@ -317,7 +347,12 @@ def update_order_status(request, order_id):
             'error': 'You do not have permission to update order status.'
         }, status=status.HTTP_403_FORBIDDEN)
     
-    order = get_object_or_404(Order, id=order_id)
+    restaurant_settings = get_business_from_request(request)
+    order = get_object_or_404(
+        Order, 
+        id=order_id,
+        restaurant_settings=restaurant_settings
+    )
     serializer = OrderStatusUpdateSerializer(data=request.data)
     
     if not serializer.is_valid():

@@ -27,7 +27,7 @@ class MenuItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = MenuItem
         fields = [
-            'id', 'name', 'description', 'price', 'formatted_price',
+            'id', 'name', 'description', 'size', 'sku', 'price', 'formatted_price',
             'category', 'category_name', 'category_id', 'image',
             'badges', 'badges_display', 'allergens', 'nutritional_info',
             'is_available', 'is_featured', 'preparation_time', 'sort_order'
@@ -55,7 +55,7 @@ class FeaturedItemsSerializer(serializers.ModelSerializer):
     class Meta:
         model = MenuItem
         fields = [
-            'id', 'name', 'description', 'price', 'formatted_price',
+            'id', 'name', 'description', 'size', 'sku', 'price', 'formatted_price',
             'category_name', 'image', 'badges', 'badges_display',
             'is_available', 'preparation_time'
         ]
@@ -75,7 +75,7 @@ class MenuSearchSerializer(serializers.ModelSerializer):
     class Meta:
         model = MenuItem
         fields = [
-            'id', 'name', 'description', 'price', 'formatted_price',
+            'id', 'name', 'description', 'size', 'sku', 'price', 'formatted_price',
             'category_name', 'image', 'badges', 'badges_display',
             'is_available', 'is_featured'
         ]

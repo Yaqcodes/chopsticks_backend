@@ -41,6 +41,8 @@ class Payment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        verbose_name = 'Payment'
+        verbose_name_plural = 'Payments'
         ordering = ['-created_at']
     
     def __str__(self):
@@ -56,7 +58,8 @@ class Payment(models.Model):
         from .services import PaystackService
         
         try:
-            paystack = PaystackService()
+            restaurant_settings = self.order.restaurant_settings
+            paystack = PaystackService(secret_key=restaurant_settings.paystack_secret_key)
             result = paystack.verify_transaction(self.reference)
             
             # Update payment status

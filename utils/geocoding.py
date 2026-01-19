@@ -110,21 +110,27 @@ def validate_address(address_string):
     }
 
 
-def get_delivery_zone(latitude, longitude):
-    """Check if coordinates are within delivery zone."""
+def get_delivery_zone(latitude, longitude, restaurant_settings=None):
+    """
+    Check if coordinates are within delivery zone.
     
-    try:
-        # Prioritize RestaurantSettings over Django settings
-        from core.models import RestaurantSettings
-        settings = RestaurantSettings.get_settings()
-        restaurant_lat = settings.restaurant_latitude
-        restaurant_lng = settings.restaurant_longitude
-        delivery_radius = settings.delivery_radius
-    except Exception:
-        # Fallback to Django settings only if RestaurantSettings fails
-        restaurant_lat = getattr(settings, 'RESTAURANT_LATITUDE', 9.0820)  # Abuja coordinates
-        restaurant_lng = getattr(settings, 'RESTAURANT_LONGITUDE', 7.3986)
-        delivery_radius = getattr(settings, 'DELIVERY_RADIUS_KM', 10.0)
+    Args:
+        latitude (float): Customer latitude
+        longitude (float): Customer longitude
+        restaurant_settings (RestaurantSettings): REQUIRED - Business settings for multi-tenant support
+    
+    Returns:
+        dict: Delivery zone information
+    
+    Raises:
+        ValueError: If restaurant_settings is not provided
+    """
+    if not restaurant_settings:
+        raise ValueError("restaurant_settings is required for multi-tenant delivery zone calculation")
+    
+    restaurant_lat = restaurant_settings.restaurant_latitude
+    restaurant_lng = restaurant_settings.restaurant_longitude
+    delivery_radius = restaurant_settings.delivery_radius
     
     distance = calculate_distance(
         (restaurant_lat, restaurant_lng),

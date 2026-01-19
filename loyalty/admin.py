@@ -6,6 +6,45 @@ from django.contrib import messages
 from django.shortcuts import get_object_or_404
 from django import forms
 from .models import LoyaltyCard, UserPoints, PointsTransaction, Reward, UserReward
+from core.admin_sites import chopsticks_admin_site
+
+
+class BusinessAdminMixin:
+    """
+    Mixin to add permission methods for business admin classes.
+    
+    Ensures that staff users linked to the business can view and manage models.
+    """
+    
+    def has_module_permission(self, request):
+        """Check if user can view this app in admin."""
+        if hasattr(self.admin_site, 'has_permission'):
+            return self.admin_site.has_permission(request)
+        return request.user.is_staff
+    
+    def has_view_permission(self, request, obj=None):
+        """Check if user can view this model."""
+        if hasattr(self.admin_site, 'has_permission'):
+            return self.admin_site.has_permission(request)
+        return request.user.is_staff
+    
+    def has_add_permission(self, request):
+        """Check if user can add objects."""
+        if hasattr(self.admin_site, 'has_permission'):
+            return self.admin_site.has_permission(request)
+        return request.user.is_staff
+    
+    def has_change_permission(self, request, obj=None):
+        """Check if user can change objects."""
+        if hasattr(self.admin_site, 'has_permission'):
+            return self.admin_site.has_permission(request)
+        return request.user.is_staff
+    
+    def has_delete_permission(self, request, obj=None):
+        """Check if user can delete objects."""
+        if hasattr(self.admin_site, 'has_permission'):
+            return self.admin_site.has_permission(request)
+        return request.user.is_staff
 
 
 class LoyaltyCardForm(forms.ModelForm):
@@ -27,8 +66,7 @@ class LoyaltyCardForm(forms.ModelForm):
         })
 
 
-@admin.register(LoyaltyCard)
-class LoyaltyCardAdmin(admin.ModelAdmin):
+class LoyaltyCardAdmin(BusinessAdminMixin, admin.ModelAdmin):
     form = LoyaltyCardForm
     list_display = ['qr_code', 'user_display', 'status_display', 'created_at', 'last_scan', 'google_url_display']
     list_filter = ['is_active', 'created_at', 'last_scan']
@@ -37,62 +75,65 @@ class LoyaltyCardAdmin(admin.ModelAdmin):
     actions = ['link_to_user', 'activate_cards', 'deactivate_cards', 'unlink_users']
     
     def changelist_view(self, request, extra_context=None):
-        """Add QR scan quick actions to the changelist view."""
+        """Add QR scan quick actions to the changelist view (CB admin only)."""
         extra_context = extra_context or {}
         
-        # Add QR scan quick action buttons
-        qr_actions = format_html('''
-            <div class="module" style="margin-bottom: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <h2 style="color: #dc3545; border-bottom: 2px solid #dc3545; padding: 15px 20px 10px 20px; margin: 0; font-size: 18px;">
-                    🍜 QR Code Scanner Quick Actions
-                </h2>
-                <div style="padding: 20px;">
-                    <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
-                        <a href="{}" class="button" style="
-                            background: #dc3545; 
-                            color: white; 
-                            padding: 12px 24px; 
-                            text-decoration: none; 
-                            border-radius: 6px; 
-                            font-weight: bold;
-                            display: inline-block;
-                            transition: all 0.3s ease;
-                            border: none;
-                            cursor: pointer;
-                            font-size: 14px;
-                        " onmouseover="this.style.background='#8b0000'; this.style.transform='translateY(-2px)'" 
-                           onmouseout="this.style.background='#dc3545'; this.style.transform='translateY(0)'">
-                            📱 QR Scan Interface
-                        </a>
-                        <a href="{}" class="button" style="
-                            background: #343a40; 
-                            color: white; 
-                            padding: 12px 24px; 
-                            text-decoration: none; 
-                            border-radius: 6px; 
-                            font-weight: bold;
-                            display: inline-block;
-                            transition: all 0.3s ease;
-                            border: none;
-                            cursor: pointer;
-                            font-size: 14px;
-                        " onmouseover="this.style.background='#495057'; this.style.transform='translateY(-2px)'" 
-                           onmouseout="this.style.background='#343a40'; this.style.transform='translateY(0)'">
-                            📊 QR Scan Dashboard
-                        </a>
+        # Only show QR actions in Chopsticks admin (not in main admin or Roschi admin)
+        if hasattr(self.admin_site, 'business_identifier') and self.admin_site.business_identifier == 'chopsticks':
+            # Add QR scan quick action buttons
+            qr_actions = format_html('''
+                <div class="module" style="margin-bottom: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <h2 style="color: #dc3545; border-bottom: 2px solid #dc3545; padding: 15px 20px 10px 20px; margin: 0; font-size: 18px;">
+                        🍜 QR Code Scanner Quick Actions
+                    </h2>
+                    <div style="padding: 20px;">
+                        <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                            <a href="{}" class="button" style="
+                                background: #dc3545; 
+                                color: white; 
+                                padding: 12px 24px; 
+                                text-decoration: none; 
+                                border-radius: 6px; 
+                                font-weight: bold;
+                                display: inline-block;
+                                transition: all 0.3s ease;
+                                border: none;
+                                cursor: pointer;
+                                font-size: 14px;
+                            " onmouseover="this.style.background='#8b0000'; this.style.transform='translateY(-2px)'" 
+                               onmouseout="this.style.background='#dc3545'; this.style.transform='translateY(0)'">
+                                📱 QR Scan Interface
+                            </a>
+                            <a href="{}" class="button" style="
+                                background: #343a40; 
+                                color: white; 
+                                padding: 12px 24px; 
+                                text-decoration: none; 
+                                border-radius: 6px; 
+                                font-weight: bold;
+                                display: inline-block;
+                                transition: all 0.3s ease;
+                                border: none;
+                                cursor: pointer;
+                                font-size: 14px;
+                            " onmouseover="this.style.background='#495057'; this.style.transform='translateY(-2px)'" 
+                               onmouseout="this.style.background='#343a40'; this.style.transform='translateY(0)'">
+                                📊 QR Scan Dashboard
+                            </a>
+                        </div>
+                        <p style="margin: 0; color: #6c757d; font-size: 13px; line-height: 1.4;">
+                            <strong>Quick Access:</strong> Use these buttons to quickly navigate to the QR code scanning tools for loyalty card management. 
+                            The QR Scan Interface allows staff to scan customer loyalty cards, while the Dashboard provides an overview of recent scans and statistics.
+                        </p>
                     </div>
-                    <p style="margin: 0; color: #6c757d; font-size: 13px; line-height: 1.4;">
-                        <strong>Quick Access:</strong> Use these buttons to quickly navigate to the QR code scanning tools for loyalty card management. 
-                        The QR Scan Interface allows staff to scan customer loyalty cards, while the Dashboard provides an overview of recent scans and statistics.
-                    </p>
                 </div>
-            </div>
-        ''', 
-        reverse('loyalty:qr_scan_interface'), 
-        reverse('loyalty:qr_scan_dashboard')
-        )
+            ''', 
+            reverse('loyalty:qr_scan_interface'), 
+            reverse('loyalty:qr_scan_dashboard')
+            )
+            
+            extra_context['qr_actions'] = qr_actions
         
-        extra_context['qr_actions'] = qr_actions
         return super().changelist_view(request, extra_context)
     
     fieldsets = (
@@ -196,8 +237,7 @@ class LoyaltyCardAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
 
 
-@admin.register(UserPoints)
-class UserPointsAdmin(admin.ModelAdmin):
+class UserPointsAdmin(BusinessAdminMixin, admin.ModelAdmin):
     list_display = ['user', 'balance', 'total_earned', 'total_spent', 'created_at', 'updated_at']
     list_filter = ['created_at', 'updated_at']
     search_fields = ['user__email', 'user__first_name', 'user__last_name']
@@ -207,8 +247,7 @@ class UserPointsAdmin(admin.ModelAdmin):
         return super().get_queryset(request).select_related('user')
 
 
-@admin.register(PointsTransaction)
-class PointsTransactionAdmin(admin.ModelAdmin):
+class PointsTransactionAdmin(BusinessAdminMixin, admin.ModelAdmin):
     list_display = ['user', 'amount_display', 'transaction_type', 'reason', 'balance_after', 'created_at']
     list_filter = ['transaction_type', 'created_at']
     search_fields = ['user__email', 'reason']
@@ -226,15 +265,13 @@ class PointsTransactionAdmin(admin.ModelAdmin):
         return super().get_queryset(request).select_related('user')
 
 
-@admin.register(Reward)
-class RewardAdmin(admin.ModelAdmin):
+class RewardAdmin(BusinessAdminMixin, admin.ModelAdmin):
     list_display = ['name', 'points_required', 'reward_type', 'is_active', 'created_at']
     list_filter = ['is_active', 'reward_type', 'created_at']
     search_fields = ['name', 'description']
 
 
-@admin.register(UserReward)
-class UserRewardAdmin(admin.ModelAdmin):
+class UserRewardAdmin(BusinessAdminMixin, admin.ModelAdmin):
     list_display = ['user', 'reward', 'points_spent', 'status', 'redeemed_at', 'expires_at', 'used_at']
     list_filter = ['status', 'redeemed_at', 'expires_at']
     search_fields = ['user__email', 'reward__name']
@@ -251,3 +288,10 @@ class UserRewardAdmin(admin.ModelAdmin):
                 'Default: 30 days from now. Leave blank to use default.'
             )
         return form
+
+# Register loyalty models with Chopsticks admin only (QR and loyalty features)
+chopsticks_admin_site.register(LoyaltyCard, LoyaltyCardAdmin)
+chopsticks_admin_site.register(UserPoints, UserPointsAdmin)
+chopsticks_admin_site.register(PointsTransaction, PointsTransactionAdmin)
+chopsticks_admin_site.register(Reward, RewardAdmin)
+chopsticks_admin_site.register(UserReward, UserRewardAdmin)
