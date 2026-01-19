@@ -159,29 +159,26 @@ def verify_payment(request, reference):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class PaystackWebhookView(View):
-    """Handle Paystack webhook events."""
+    """
+    Handle Paystack webhook events.
+    
+    Note: Paystack webhooks come from Paystack's servers, so we identify
+    the business from the payment reference in the webhook data, not from request headers.
+    """
     
     def post(self, request, *args, **kwargs):
         try:
-            restaurant_settings = get_business_from_request(request)
             # Get webhook signature
             signature = request.headers.get('X-Paystack-Signature')
             if not signature:
                 return HttpResponse('Missing signature', status=400)
             
-            # Verify webhook signature
-            webhook_secret = restaurant_settings.paystack_webhook_secret or restaurant_settings.paystack_secret_key
-            if not restaurant_settings.paystack_secret_key:
-                return HttpResponse('Paystack secret key not configured for this business', status=400)
-            paystack = PaystackService(
-                secret_key=restaurant_settings.paystack_secret_key,
-                webhook_secret=webhook_secret,
-            )
-            if not paystack.verify_webhook_signature(request.body.decode('utf-8'), signature):
-                return HttpResponse('Invalid signature', status=400)
+            # Parse webhook data first to get reference and identify business
+            try:
+                data = json.loads(request.body)
+            except json.JSONDecodeError:
+                return HttpResponse('Invalid JSON', status=400)
             
-            # Parse webhook data
-            data = json.loads(request.body)
             event = data.get('event')
             
             if event == 'charge.success':
@@ -189,33 +186,50 @@ class PaystackWebhookView(View):
                 transaction_data = data.get('data', {})
                 reference = transaction_data.get('reference')
                 
-                if reference:
-                    try:
-                        payment = Payment.objects.get(reference=reference)
-                    except Payment.DoesNotExist:
-                        logger.error("Payment not found for reference: %s", reference)
-                        return HttpResponse('Payment not found', status=404)
+                if not reference:
+                    logger.error("Webhook missing reference in transaction data")
+                    return HttpResponse('Missing reference', status=400)
+                
+                # Identify business from payment reference (webhooks don't have frontend headers)
+                try:
+                    payment = Payment.objects.get(reference=reference)
+                    restaurant_settings = payment.order.restaurant_settings
+                    logger.info(f"Identified business from webhook reference: {restaurant_settings.domain}")
+                except Payment.DoesNotExist:
+                    logger.error("Payment not found for reference: %s", reference)
+                    return HttpResponse('Payment not found', status=404)
+                
+                # Verify webhook signature using the identified business's secret
+                webhook_secret = restaurant_settings.paystack_webhook_secret or restaurant_settings.paystack_secret_key
+                if not restaurant_settings.paystack_secret_key:
+                    logger.error("Paystack secret key not configured for business: %s", restaurant_settings.domain)
+                    return HttpResponse('Paystack secret key not configured for this business', status=400)
+                
+                paystack = PaystackService(
+                    secret_key=restaurant_settings.paystack_secret_key,
+                    webhook_secret=webhook_secret,
+                )
+                if not paystack.verify_webhook_signature(request.body.decode('utf-8'), signature):
+                    logger.error("Invalid webhook signature for reference: %s", reference)
+                    return HttpResponse('Invalid signature', status=400)
 
-                    if payment.order.restaurant_settings != restaurant_settings:
-                        return HttpResponse('Payment does not belong to this business', status=403)
-
-                    # Update existing payment
-                    payment.status = 'success'
-                    payment.paystack_status = 'success'
-                    payment.verified_at = timezone.now()
-                    payment.save()
-                    
-                    # Update order
-                    order = payment.order
-                    order.payment_status = 'paid'
-                    order.payment_verified_at = timezone.now()
-                    order.save()
-                    
-                    # Award loyalty points
-                    if order.user:
-                        award_points_for_order(order)
-                    
-                    logger.info("Webhook processed successfully for reference: %s", reference)
+                # Update existing payment
+                payment.status = 'success'
+                payment.paystack_status = 'success'
+                payment.verified_at = timezone.now()
+                payment.save()
+                
+                # Update order
+                order = payment.order
+                order.payment_status = 'paid'
+                order.payment_verified_at = timezone.now()
+                order.save()
+                
+                # Award loyalty points
+                if order.user:
+                    award_points_for_order(order)
+                
+                logger.info("Webhook processed successfully for reference: %s", reference)
             
             return HttpResponse('OK', status=200)
             
@@ -232,17 +246,14 @@ def payment_callback(request):
     Handle Paystack payment callback redirects.
     This is called when users are redirected back from Paystack after payment.
     Note: Using regular Django view instead of @api_view to properly handle redirects.
+    
+    Note: Paystack callbacks come from checkout.paystack.com, so we identify
+    the business from the payment reference, not from request headers.
     """
     try:
         logger.info(f"Payment callback received. Host: {request.get_host()}, Path: {request.path}, Query: {request.GET}")
         
-        try:
-            restaurant_settings = get_business_from_request(request)
-        except ValueError as e:
-            logger.error(f"Business identification failed: {str(e)}")
-            # Multi-tenancy is strict - no fallbacks allowed
-            raise ValueError(f"Cannot process payment: {str(e)}")
-        # Get reference from query parameters
+        # Get reference from query parameters first
         reference = request.GET.get('reference')
         trxref = request.GET.get('trxref')
         
@@ -255,6 +266,18 @@ def payment_callback(request):
                 'message': 'Payment reference not found in callback'
             }, status=400)
         
+        # Identify business from payment reference (Paystack callbacks don't have frontend headers)
+        try:
+            payment = Payment.objects.get(reference=reference)
+            restaurant_settings = payment.order.restaurant_settings
+            logger.info(f"Identified business from payment reference: {restaurant_settings.domain}")
+        except Payment.DoesNotExist:
+            logger.error(f"Payment not found for reference: {reference}")
+            return JsonResponse({
+                'error': 'Payment not found',
+                'message': f'Payment with reference {reference} does not exist'
+            }, status=404)
+        
         # Verify the payment
         if not restaurant_settings.paystack_secret_key:
             logger.error("Paystack secret key not configured")
@@ -264,12 +287,6 @@ def payment_callback(request):
         paystack = PaystackService(secret_key=restaurant_settings.paystack_secret_key)
         result = paystack.verify_transaction(reference)
         logger.info(f"Payment verification result: {result.get('status')}")
-        
-        # Get payment record
-        payment = get_object_or_404(Payment, reference=reference)
-        if payment.order.restaurant_settings != restaurant_settings:
-            logger.error(f"Payment {reference} does not belong to business {restaurant_settings.domain}")
-            return JsonResponse({'error': 'Payment does not belong to this business'}, status=403)
         
         # Update payment status
         payment.paystack_status = result.get('status', '')
@@ -322,9 +339,12 @@ def payment_callback(request):
                     payment = Payment.objects.get(reference=reference)
                     frontend_url = get_frontend_url_from_business(payment.order.restaurant_settings, request=request)
                 except (Payment.DoesNotExist, AttributeError):
-                    # Fallback: try to identify business from request
-                    restaurant_settings = get_business_from_request(request)
-                    frontend_url = get_frontend_url_from_business(restaurant_settings, request=request)
+                    # If payment doesn't exist, we can't identify business - log and return error
+                    logger.error(f"Cannot redirect: Payment {reference} not found, cannot identify business")
+                    return JsonResponse({
+                        'error': 'Payment callback processing failed',
+                        'message': 'Cannot identify business for redirect'
+                    }, status=500)
                 
                 frontend_url = frontend_url.rstrip('/')
                 redirect_url = f"{frontend_url}/payment/success?reference={reference}&error=1"
