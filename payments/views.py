@@ -287,7 +287,8 @@ def payment_callback(request):
             
             # Redirect to frontend success page
             # Use order's restaurant_settings to get correct frontend URL (multi-tenant)
-            frontend_url = get_frontend_url_from_business(payment.order.restaurant_settings)
+            # Pass request to preserve protocol/subdomain/port from original request
+            frontend_url = get_frontend_url_from_business(payment.order.restaurant_settings, request=request)
             frontend_url = frontend_url.rstrip('/')
             redirect_url = f"{frontend_url}/payment/success?reference={reference}"
             logger.info(f"Payment successful. Redirecting to frontend: {redirect_url} (business: {payment.order.restaurant_settings.domain})")
@@ -303,7 +304,8 @@ def payment_callback(request):
             
             # Redirect to frontend success page with failed status
             # Use order's restaurant_settings to get correct frontend URL (multi-tenant)
-            frontend_url = get_frontend_url_from_business(payment.order.restaurant_settings)
+            # Pass request to preserve protocol/subdomain/port from original request
+            frontend_url = get_frontend_url_from_business(payment.order.restaurant_settings, request=request)
             frontend_url = frontend_url.rstrip('/')
             redirect_url = f"{frontend_url}/payment/success?reference={reference}&status=failed"
             logger.info(f"Payment failed. Redirecting to frontend: {redirect_url} (business: {payment.order.restaurant_settings.domain})")
@@ -318,11 +320,11 @@ def payment_callback(request):
                 # Try to get frontend URL from payment/order if available
                 try:
                     payment = Payment.objects.get(reference=reference)
-                    frontend_url = get_frontend_url_from_business(payment.order.restaurant_settings)
+                    frontend_url = get_frontend_url_from_business(payment.order.restaurant_settings, request=request)
                 except (Payment.DoesNotExist, AttributeError):
                     # Fallback: try to identify business from request
                     restaurant_settings = get_business_from_request(request)
-                    frontend_url = get_frontend_url_from_business(restaurant_settings)
+                    frontend_url = get_frontend_url_from_business(restaurant_settings, request=request)
                 
                 frontend_url = frontend_url.rstrip('/')
                 redirect_url = f"{frontend_url}/payment/success?reference={reference}&error=1"

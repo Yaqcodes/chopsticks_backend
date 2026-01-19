@@ -378,7 +378,7 @@ def google_oauth_callback(request):
     try:
         # Identify business for multi-tenant frontend URL (strict - no fallbacks)
         restaurant_settings = get_business_from_request(request)
-        frontend_url = get_frontend_url_from_business(restaurant_settings)
+        frontend_url = get_frontend_url_from_business(restaurant_settings, request=request)
         
         # Get the authorization code from the callback
         code = request.GET.get('code')
@@ -490,7 +490,7 @@ def google_oauth_callback(request):
         if 'frontend_url' not in locals():
             try:
                 restaurant_settings = get_business_from_request(request)
-                frontend_url = get_frontend_url_from_business(restaurant_settings)
+                frontend_url = get_frontend_url_from_business(restaurant_settings, request=request)
             except ValueError as ve:
                 # If business identification fails, log error and raise
                 logger.error(f"OAuth callback error - business identification failed: {str(ve)}")

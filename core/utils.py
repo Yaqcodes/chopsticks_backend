@@ -102,18 +102,21 @@ def get_business_from_request(request):
     )
 
 
-def get_frontend_url_from_business(restaurant_settings):
+def get_frontend_url_from_business(restaurant_settings, request=None):
     """
     Get frontend URL for a business from RestaurantSettings.
     
-    Constructs the frontend URL from the domain field.
+    Constructs the frontend URL from the domain field, preserving protocol
+    and subdomain from the original request when possible.
+    
     Strict multi-tenancy: domain must be configured.
     
     Args:
         restaurant_settings: RestaurantSettings instance
+        request: Optional Django request object to preserve original URL details
         
     Returns:
-        str: Frontend URL (e.g., 'https://roschiwater.com')
+        str: Frontend URL (e.g., 'https://roschiwater.com' or 'http://localhost:5173')
         
     Raises:
         ValueError: If restaurant_settings is None or domain is not configured
@@ -127,8 +130,50 @@ def get_frontend_url_from_business(restaurant_settings):
             f"Please configure domain in RestaurantSettings."
         )
     
-    # Construct URL from domain (assume HTTPS in production)
     domain = restaurant_settings.domain.strip()
+    
+    # Strip protocol if present for domain matching
+    domain_for_matching = domain.lower()
+    if domain_for_matching.startswith('http://') or domain_for_matching.startswith('https://'):
+        domain_for_matching = urlparse(domain).netloc.split(':')[0]
+        domain = domain_for_matching  # Use cleaned domain for processing
+    
+    # Handle development/localhost
+    if 'localhost' in domain_for_matching or '127.0.0.1' in domain_for_matching:
+        # For localhost, use HTTP and preserve port if in request
+        if request:
+            origin = request.headers.get('Origin') or request.headers.get('Referer')
+            if origin:
+                try:
+                    parsed = urlparse(origin)
+                    if 'localhost' in parsed.netloc.lower() or '127.0.0.1' in parsed.netloc.lower():
+                        protocol = parsed.scheme or 'http'
+                        port = f":{parsed.port}" if parsed.port else ''
+                        return f"{protocol}://{parsed.netloc}{port}"
+                except (ValueError, AttributeError) as e:
+                    logger.debug("Failed to parse origin for localhost: %s", str(e))
+        # Default localhost URL (Vite dev server typically runs on 5173)
+        if ':5173' not in domain and ':' not in domain:
+            return "http://localhost:5173"
+        return f"http://{domain}" if not domain.startswith('http') else domain
+    
+    # Production: Try to preserve protocol and subdomain from request
+    if request:
+        origin = request.headers.get('Origin') or request.headers.get('Referer')
+        if origin:
+            try:
+                parsed = urlparse(origin)
+                original_domain = parsed.netloc.split(':')[0].lower()
+                stored_domain = domain.lower()
+                
+                # If original domain matches or is a subdomain of stored domain
+                if original_domain == stored_domain or original_domain.endswith('.' + stored_domain):
+                    protocol = parsed.scheme or 'https'
+                    return f"{protocol}://{original_domain}"
+            except (ValueError, AttributeError) as e:
+                logger.debug("Failed to parse origin for production URL: %s", str(e))
+    
+    # Fallback: construct from stored domain (assume HTTPS in production)
     if not domain.startswith('http'):
         return f"https://{domain}"
     return domain
