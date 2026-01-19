@@ -100,3 +100,35 @@ def get_business_from_request(request):
         f"Please configure domain in RestaurantSettings. "
         f"Available domains: {list(RestaurantSettings.objects.values_list('domain', flat=True))}"
     )
+
+
+def get_frontend_url_from_business(restaurant_settings):
+    """
+    Get frontend URL for a business from RestaurantSettings.
+    
+    Constructs the frontend URL from the domain field.
+    Strict multi-tenancy: domain must be configured.
+    
+    Args:
+        restaurant_settings: RestaurantSettings instance
+        
+    Returns:
+        str: Frontend URL (e.g., 'https://roschiwater.com')
+        
+    Raises:
+        ValueError: If restaurant_settings is None or domain is not configured
+    """
+    if not restaurant_settings:
+        raise ValueError("RestaurantSettings is required for frontend URL")
+    
+    if not restaurant_settings.domain:
+        raise ValueError(
+            f"Domain not configured for business '{restaurant_settings.name}'. "
+            f"Please configure domain in RestaurantSettings."
+        )
+    
+    # Construct URL from domain (assume HTTPS in production)
+    domain = restaurant_settings.domain.strip()
+    if not domain.startswith('http'):
+        return f"https://{domain}"
+    return domain

@@ -12,7 +12,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from core.utils import get_business_from_request
+from core.utils import get_business_from_request, get_frontend_url_from_business
 from .models import Payment
 from .services import PaystackService, PaystackError, PaystackAPIError, PaystackVerificationError
 from orders.models import Order
@@ -286,23 +286,11 @@ def payment_callback(request):
                 award_points_for_order(payment.order)
             
             # Redirect to frontend success page
-            # Determine frontend URL based on domain or use default
-            frontend_url = getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5173')
-            
-            # For multi-tenant: if this is Roschi Water domain, use Roschi frontend URL
-            # Otherwise use default or domain-based logic
-            host = request.get_host().split(':')[0].lower()
-            logger.info(f"Determining frontend URL. Host: {host}, Current frontend_url: {frontend_url}")
-            
-            if 'roschi' in host or 'roschiwater' in host:
-                frontend_url = getattr(settings, 'ROSCHI_FRONTEND_URL', getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5173'))
-            elif 'chopsticks' in host:
-                frontend_url = getattr(settings, 'CHOPSTICKS_FRONTEND_URL', frontend_url)
-            
-            # Ensure URL is absolute and properly formatted
+            # Use order's restaurant_settings to get correct frontend URL (multi-tenant)
+            frontend_url = get_frontend_url_from_business(payment.order.restaurant_settings)
             frontend_url = frontend_url.rstrip('/')
             redirect_url = f"{frontend_url}/payment/success?reference={reference}"
-            logger.info(f"Payment successful. Redirecting to frontend: {redirect_url} (from host: {host}, frontend_url setting: {frontend_url})")
+            logger.info(f"Payment successful. Redirecting to frontend: {redirect_url} (business: {payment.order.restaurant_settings.domain})")
             
             # Create redirect response
             response = HttpResponseRedirect(redirect_url)
@@ -314,19 +302,11 @@ def payment_callback(request):
             payment.order.save()
             
             # Redirect to frontend success page with failed status
-            frontend_url = getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5173')
-            
-            # For multi-tenant: if this is Roschi Water domain, use Roschi frontend URL
-            host = request.get_host().split(':')[0].lower()
-            if 'roschi' in host or 'roschiwater' in host:
-                frontend_url = getattr(settings, 'ROSCHI_FRONTEND_URL', getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5173'))
-            elif 'chopsticks' in host:
-                frontend_url = getattr(settings, 'CHOPSTICKS_FRONTEND_URL', frontend_url)
-            
-            # Ensure URL is absolute and properly formatted
+            # Use order's restaurant_settings to get correct frontend URL (multi-tenant)
+            frontend_url = get_frontend_url_from_business(payment.order.restaurant_settings)
             frontend_url = frontend_url.rstrip('/')
             redirect_url = f"{frontend_url}/payment/success?reference={reference}&status=failed"
-            logger.info(f"Payment failed. Redirecting to frontend: {redirect_url} (from host: {host})")
+            logger.info(f"Payment failed. Redirecting to frontend: {redirect_url} (business: {payment.order.restaurant_settings.domain})")
             return HttpResponseRedirect(redirect_url)
             
     except Exception as e:
@@ -335,18 +315,23 @@ def payment_callback(request):
         reference = request.GET.get('reference', '')
         if reference:
             try:
-                frontend_url = getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5173')
-                host = request.get_host().split(':')[0].lower()
-                if 'roschi' in host or 'roschiwater' in host:
-                    frontend_url = getattr(settings, 'ROSCHI_FRONTEND_URL', getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5173'))
-                elif 'chopsticks' in host:
-                    frontend_url = getattr(settings, 'CHOPSTICKS_FRONTEND_URL', frontend_url)
+                # Try to get frontend URL from payment/order if available
+                try:
+                    payment = Payment.objects.get(reference=reference)
+                    frontend_url = get_frontend_url_from_business(payment.order.restaurant_settings)
+                except (Payment.DoesNotExist, AttributeError):
+                    # Fallback: try to identify business from request
+                    restaurant_settings = get_business_from_request(request)
+                    frontend_url = get_frontend_url_from_business(restaurant_settings)
+                
                 frontend_url = frontend_url.rstrip('/')
                 redirect_url = f"{frontend_url}/payment/success?reference={reference}&error=1"
                 logger.info(f"Error occurred, redirecting to frontend: {redirect_url}")
                 return HttpResponseRedirect(redirect_url)
             except Exception as redirect_error:
                 logger.error(f"Failed to redirect on error: {str(redirect_error)}")
+                # Re-raise if business identification fails (strict multi-tenancy)
+                raise
         
         return JsonResponse({
             'error': 'Payment callback processing failed',

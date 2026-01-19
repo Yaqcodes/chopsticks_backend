@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import status, generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -15,6 +17,8 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.core.exceptions import ValidationError
 from decouple import config
 
+logger = logging.getLogger(__name__)
+
 from .models import User, SocialAccount
 from .serializers import (
     UserRegistrationSerializer, UserLoginSerializer, UserProfileSerializer,
@@ -22,6 +26,7 @@ from .serializers import (
     SocialLoginSerializer
 )
 from .google_oauth import validate_google_oauth_token
+from core.utils import get_business_from_request, get_frontend_url_from_business
 
 
 class RegisterView(generics.CreateAPIView):
@@ -371,11 +376,14 @@ def google_oauth_url(request):
 def google_oauth_callback(request):
     """Handle Google OAuth callback and redirect to frontend."""
     try:
+        # Identify business for multi-tenant frontend URL (strict - no fallbacks)
+        restaurant_settings = get_business_from_request(request)
+        frontend_url = get_frontend_url_from_business(restaurant_settings)
+        
         # Get the authorization code from the callback
         code = request.GET.get('code')
         if not code:
             # Redirect to frontend with error
-            frontend_url = settings.FRONTEND_BASE_URL
             return redirect(f"{frontend_url}/?oauth=error&message=No authorization code received")
         
         # Exchange the authorization code for an access token
@@ -394,7 +402,6 @@ def google_oauth_callback(request):
         
         # Check if email is verified
         if not google_user_info.get('email_verified', False):
-            frontend_url = settings.FRONTEND_BASE_URL
             return redirect(f"{frontend_url}/?oauth=error&message=Email not verified with Google")
         
         # Check if social account exists
@@ -472,7 +479,6 @@ def google_oauth_callback(request):
         user_data = UserProfileSerializer(user).data
         
         # Redirect to frontend with success and tokens
-        frontend_url = settings.FRONTEND_BASE_URL
         tokens_param = f"access={refresh.access_token}&refresh={str(refresh)}"
         user_param = f"user={user_data['id']}"
         
@@ -480,6 +486,15 @@ def google_oauth_callback(request):
         
     except Exception as e:
         # Redirect to frontend with error
-        frontend_url = settings.FRONTEND_BASE_URL
+        # Try to get frontend URL from request if not already set
+        if 'frontend_url' not in locals():
+            try:
+                restaurant_settings = get_business_from_request(request)
+                frontend_url = get_frontend_url_from_business(restaurant_settings)
+            except ValueError as ve:
+                # If business identification fails, log error and raise
+                logger.error(f"OAuth callback error - business identification failed: {str(ve)}")
+                raise ValueError(f"Cannot redirect: {str(ve)}")
+        
         error_message = str(e).replace(' ', '%20')
         return redirect(f"{frontend_url}/?oauth=error&message={error_message}")

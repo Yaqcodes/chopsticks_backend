@@ -19,10 +19,11 @@ USE_L10N = True
 USE_TZ = True
 
 # Base URL for backend (used for callbacks, etc.)
-BACKEND_BASE_URL = config('BASE_URL', default='http://localhost:8000')
+BACKEND_BASE_URL = config('BASE_URL', default='stringtheorylabs.pythonanywhere.com')
 
-# Base URL for frontend (used for redirects)
-FRONTEND_BASE_URL = config('FRONTEND_BASE_URL', default='http://localhost:5173')
+# NOTE: FRONTEND_BASE_URL has been removed for strict multi-tenancy.
+# Frontend URLs are now determined from RestaurantSettings.domain via get_frontend_url_from_business().
+# Each business must have its domain configured in RestaurantSettings.
 
 # Production frontend URLs
 PRODUCTION_FRONTEND_URLS = [
@@ -31,16 +32,18 @@ PRODUCTION_FRONTEND_URLS = [
     'https://chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app',
     'https://chopsticksandbowls.com',
     'https://www.chopsticksandbowls.com',
-    'roschi-water.vercel.app'
+    'https://roschi-water.vercel.app',
     'https://www.roschiwater.com',
     'https://roschiwater.com',
 ]
 
 # Environment Variables for Production (set these on PythonAnywhere):
 # DEBUG=False
-# ALLOWED_HOSTS=your-pythonanywhere-domain.com,chopsticks-frontend.vercel.app,chopsticksandbowls.com
-# CORS_ALLOWED_ORIGINS=https://chopsticks-frontend.vercel.app,https://chopsticksandbowls.com
+# ALLOWED_HOSTS=stringtheorylabs.pythonanywhere.com,roschiwater.com,www.roschiwater.com,chopsticksandbowls.com,www.chopsticksandbowls.com
+# CORS_ALLOWED_ORIGINS=https://roschiwater.com,https://www.roschiwater.com,https://chopsticksandbowls.com,https://www.chopsticksandbowls.com
 # SECRET_KEY=your-production-secret-key
+# BASE_URL=https://stringtheorylabs.pythonanywhere.com
+# OAUTH_BASE_URL=https://stringtheorylabs.pythonanywhere.com
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-here')
@@ -48,7 +51,7 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-here'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,chopsticks-frontend.vercel.app,chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app,chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app,chopsticksandbowls.com,www.chopsticksandbowls.com,chopsticksandb0wls.pythonanywhere.com', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,chopsticks-frontend.vercel.app,chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app,chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app,chopsticksandbowls.com,www.chopsticksandbowls.com,chopsticksandb0wls.pythonanywhere.com,stringtheorylabs.pythonanywhere.com,roschiwater.com,www.roschiwater.com', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # Application definition
 INSTALLED_APPS = [
@@ -170,7 +173,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173,http://127.0.0.1:5173,https://chopsticks-frontend.vercel.app,https://chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app,https://chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app,https://chopsticksandbowls.com,https://www.chopsticksandbowls.com', cast=lambda v: [s.strip() for s in v.split(',')])
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173,http://127.0.0.1:5173,https://chopsticks-frontend.vercel.app,https://chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app,https://chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app,https://chopsticksandbowls.com,https://www.chopsticksandbowls.com,https://roschiwater.com,https://www.roschiwater.com', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # Additional CORS settings for production
 CORS_ALLOW_CREDENTIALS = True
@@ -266,7 +269,7 @@ GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
 # Social Authentication settings
 SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = config('SOCIAL_AUTH_GOOGLE_OAUTH2_KEY', default='')
 SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = config('SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET', default='')
-OAUTH_BASE_URL = config('OAUTH_BASE_URL', default='https://chopsticksandb0wls.pythonanywhere.com')
+OAUTH_BASE_URL = config('OAUTH_BASE_URL', default='https://stringtheorylabs.pythonanywhere.com')
 
 SOCIAL_AUTH_FACEBOOK_KEY = config('SOCIAL_AUTH_FACEBOOK_KEY', default='')
 SOCIAL_AUTH_FACEBOOK_SECRET = config('SOCIAL_AUTH_FACEBOOK_SECRET', default='')
