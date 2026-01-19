@@ -191,14 +191,14 @@ class PaystackWebhookView(View):
                     return HttpResponse('Missing reference', status=400)
                 
                 # Identify business from payment reference (webhooks don't have frontend headers)
-                try:
-                    payment = Payment.objects.get(reference=reference)
+                    try:
+                        payment = Payment.objects.get(reference=reference)
                     restaurant_settings = payment.order.restaurant_settings
                     logger.info(f"Identified business from webhook reference: {restaurant_settings.domain}")
-                except Payment.DoesNotExist:
-                    logger.error("Payment not found for reference: %s", reference)
-                    return HttpResponse('Payment not found', status=404)
-                
+                    except Payment.DoesNotExist:
+                        logger.error("Payment not found for reference: %s", reference)
+                        return HttpResponse('Payment not found', status=404)
+
                 # Verify webhook signature using the identified business's secret
                 webhook_secret = restaurant_settings.paystack_webhook_secret or restaurant_settings.paystack_secret_key
                 if not restaurant_settings.paystack_secret_key:
@@ -213,23 +213,23 @@ class PaystackWebhookView(View):
                     logger.error("Invalid webhook signature for reference: %s", reference)
                     return HttpResponse('Invalid signature', status=400)
 
-                # Update existing payment
-                payment.status = 'success'
-                payment.paystack_status = 'success'
-                payment.verified_at = timezone.now()
-                payment.save()
-                
-                # Update order
-                order = payment.order
-                order.payment_status = 'paid'
-                order.payment_verified_at = timezone.now()
-                order.save()
-                
-                # Award loyalty points
-                if order.user:
-                    award_points_for_order(order)
-                
-                logger.info("Webhook processed successfully for reference: %s", reference)
+                    # Update existing payment
+                    payment.status = 'success'
+                    payment.paystack_status = 'success'
+                    payment.verified_at = timezone.now()
+                    payment.save()
+                    
+                    # Update order
+                    order = payment.order
+                    order.payment_status = 'paid'
+                    order.payment_verified_at = timezone.now()
+                    order.save()
+                    
+                    # Award loyalty points
+                    if order.user:
+                        award_points_for_order(order)
+                    
+                    logger.info("Webhook processed successfully for reference: %s", reference)
             
             return HttpResponse('OK', status=200)
             
@@ -302,13 +302,13 @@ def payment_callback(request):
             if payment.order.user:
                 award_points_for_order(payment.order)
             
-            # Redirect to frontend success page
+            # Redirect to frontend callback page (frontend will verify and redirect to success)
             # Use order's restaurant_settings to get correct frontend URL (multi-tenant)
             # Pass request to preserve protocol/subdomain/port from original request
             frontend_url = get_frontend_url_from_business(payment.order.restaurant_settings, request=request)
             frontend_url = frontend_url.rstrip('/')
-            redirect_url = f"{frontend_url}/payment/success?reference={reference}"
-            logger.info(f"Payment successful. Redirecting to frontend: {redirect_url} (business: {payment.order.restaurant_settings.domain})")
+            redirect_url = f"{frontend_url}/payment/callback?reference={reference}"
+            logger.info(f"Payment successful. Redirecting to frontend callback: {redirect_url} (business: {payment.order.restaurant_settings.domain})")
             
             # Create redirect response
             response = HttpResponseRedirect(redirect_url)
@@ -319,13 +319,13 @@ def payment_callback(request):
             payment.order.payment_status = 'failed'
             payment.order.save()
             
-            # Redirect to frontend success page with failed status
+            # Redirect to frontend callback page with failed status
             # Use order's restaurant_settings to get correct frontend URL (multi-tenant)
             # Pass request to preserve protocol/subdomain/port from original request
             frontend_url = get_frontend_url_from_business(payment.order.restaurant_settings, request=request)
             frontend_url = frontend_url.rstrip('/')
-            redirect_url = f"{frontend_url}/payment/success?reference={reference}&status=failed"
-            logger.info(f"Payment failed. Redirecting to frontend: {redirect_url} (business: {payment.order.restaurant_settings.domain})")
+            redirect_url = f"{frontend_url}/payment/callback?reference={reference}&status=failed"
+            logger.info(f"Payment failed. Redirecting to frontend callback: {redirect_url} (business: {payment.order.restaurant_settings.domain})")
             return HttpResponseRedirect(redirect_url)
             
     except Exception as e:
@@ -347,8 +347,8 @@ def payment_callback(request):
                     }, status=500)
                 
                 frontend_url = frontend_url.rstrip('/')
-                redirect_url = f"{frontend_url}/payment/success?reference={reference}&error=1"
-                logger.info(f"Error occurred, redirecting to frontend: {redirect_url}")
+                redirect_url = f"{frontend_url}/payment/callback?reference={reference}&error=1"
+                logger.info(f"Error occurred, redirecting to frontend callback: {redirect_url}")
                 return HttpResponseRedirect(redirect_url)
             except Exception as redirect_error:
                 logger.error(f"Failed to redirect on error: {str(redirect_error)}")
