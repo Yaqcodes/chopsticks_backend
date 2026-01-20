@@ -11,8 +11,8 @@ from .main_admin_site import main_admin_site
 class RestaurantSettingsAdmin(admin.ModelAdmin):
     """Admin interface for RestaurantSettings model."""
     
-    list_display = ['name', 'domain', 'restaurant_coordinates', 'delivery_fee_base', 'delivery_fee_per_km', 'delivery_radius', 'is_open', 'delivery_fee_info', 'current_delivery_fee', 'updated_at']
-    list_editable = ['delivery_fee_base', 'delivery_fee_per_km', 'delivery_radius', 'is_open']
+    list_display = ['name', 'domain', 'restaurant_coordinates', 'delivery_radius', 'is_open', 'updated_at']
+    list_editable = ['delivery_radius', 'is_open']
     readonly_fields = ['created_at', 'updated_at']
     search_fields = ['name', 'address', 'phone', 'email']
     list_filter = ['is_open', 'maintenance_mode', 'created_at', 'updated_at']
@@ -42,12 +42,9 @@ class RestaurantSettingsAdmin(admin.ModelAdmin):
                 'delivery_radius', 
                 'minimum_order', 
                 'free_delivery_threshold',
-                'delivery_fee_base',
-                'delivery_fee_per_km',
-                'pickup_delivery_fee',
                 'vat_rate'
             ),
-            'description': 'Configure delivery fees, radius, and thresholds. Delivery fee = Base + (Distance × Per KM)'
+            'description': 'Configure delivery radius, minimum order, and tax rate.'
         }),
         ('Payment Methods', {
             'fields': ('accepts_cash', 'accepts_card', 'accepts_mobile_money')
@@ -68,7 +65,7 @@ class RestaurantSettingsAdmin(admin.ModelAdmin):
         }),
     )
     
-    actions = ['reset_delivery_fees', 'enable_free_delivery', 'disable_free_delivery']
+    actions = []
     
     def has_add_permission(self, request):
         """Only allow one settings instance."""
@@ -79,19 +76,8 @@ class RestaurantSettingsAdmin(admin.ModelAdmin):
         return False
 
     def get_form(self, request, obj=None, **kwargs):
-        """Custom form with enhanced help text for delivery fees."""
+        """Custom form with enhanced help text."""
         form = super().get_form(request, obj, **kwargs)
-        
-        # Add helpful text for delivery fee fields
-        if form.base_fields.get('delivery_fee_base'):
-            form.base_fields['delivery_fee_base'].help_text = (
-                'Base delivery fee in Naira (₦). This is the minimum delivery charge.'
-            )
-        
-        if form.base_fields.get('delivery_fee_per_km'):
-            form.base_fields['delivery_fee_per_km'].help_text = (
-                'Additional fee per kilometer in Naira (₦). Total delivery fee = Base + (Distance × Per KM)'
-            )
         
         if form.base_fields.get('delivery_radius'):
             form.base_fields['delivery_radius'].help_text = (
@@ -122,65 +108,6 @@ class RestaurantSettingsAdmin(admin.ModelAdmin):
     restaurant_coordinates.short_description = "Coordinates"
     restaurant_coordinates.allow_tags = True
     
-    def delivery_fee_info(self, obj):
-        """Display delivery fee calculation information."""
-        if obj.delivery_fee_base and obj.delivery_fee_per_km:
-            return f"Base: ₦{obj.delivery_fee_base} + ₦{obj.delivery_fee_per_km}/km"
-        elif obj.delivery_fee_base:
-            return f"Fixed: ₦{obj.delivery_fee_base}"
-        else:
-            return "Not configured"
-    delivery_fee_info.short_description = "Delivery Fee Structure"
-    
-    def reset_delivery_fees(self, request, queryset):
-        """Reset delivery fees to default values."""
-        from django.conf import settings
-        count = 0
-        for settings_obj in queryset:
-            settings_obj.delivery_fee_base = getattr(settings, 'DEFAULT_DELIVERY_FEE_BASE', 2000.00)
-            settings_obj.delivery_fee_per_km = getattr(settings, 'DEFAULT_DELIVERY_FEE_PER_KM', 150.00)
-            settings_obj.save()
-            count += 1
-        
-        self.message_user(request, f'Successfully reset delivery fees for {count} restaurant settings.')
-    reset_delivery_fees.short_description = "Reset delivery fees to defaults"
-    
-    def enable_free_delivery(self, request, queryset):
-        """Enable free delivery by setting delivery fees to 0."""
-        count = 0
-        for settings_obj in queryset:
-            settings_obj.delivery_fee_base = 0.00
-            settings_obj.delivery_fee_per_km = 0.00
-            settings_obj.save()
-            count += 1
-        
-        self.message_user(request, f'Successfully enabled free delivery for {count} restaurant settings.')
-    enable_free_delivery.short_description = "Enable free delivery"
-    
-    def disable_free_delivery(self, request, queryset):
-        """Disable free delivery by setting default delivery fees."""
-        from django.conf import settings
-        count = 0
-        for settings_obj in queryset:
-            settings_obj.delivery_fee_base = getattr(settings, 'DEFAULT_DELIVERY_FEE_BASE', 2000.00)
-            settings_obj.delivery_fee_per_km = getattr(settings, 'DEFAULT_DELIVERY_FEE_PER_KM', 150.00)
-            settings_obj.save()
-            count += 1
-        
-        self.message_user(request, f'Successfully disabled free delivery for {count} restaurant settings.')
-    disable_free_delivery.short_description = "Disable free delivery"
-    
-    def current_delivery_fee(self, obj):
-        """Display current delivery fee calculation example."""
-        if obj.delivery_fee_base and obj.delivery_fee_per_km:
-            example_5km = obj.delivery_fee_base + (5 * obj.delivery_fee_per_km)
-            example_10km = obj.delivery_fee_base + (10 * obj.delivery_fee_per_km)
-            return f"5km: ₦{example_5km:.2f}, 10km: ₦{example_10km:.2f}"
-        elif obj.delivery_fee_base:
-            return f"Fixed: ₦{obj.delivery_fee_base:.2f}"
-        else:
-            return "Free delivery"
-    current_delivery_fee.short_description = "Example Delivery Fees"
     
 
 
@@ -190,7 +117,17 @@ class BusinessAdminMixin:
     Mixin to add permission methods for business admin classes.
     
     Ensures that staff users linked to the business can view and manage models.
+    Also provides dashboard-style redirect for single-record models.
     """
+    
+    def changelist_view(self, request, extra_context=None):
+        """Redirect to change view if there's only one object (dashboard-style interface)."""
+        queryset = self.get_queryset(request)
+        if queryset.count() == 1:
+            obj = queryset.first()
+            from django.shortcuts import redirect
+            return redirect(f'{obj.pk}/change/')
+        return super().changelist_view(request, extra_context)
     
     def has_module_permission(self, request):
         """Check if user can view this app in admin."""
@@ -227,19 +164,22 @@ class BusinessAdminMixin:
 class RoschiBusinessSettingsAdmin(BusinessAdminMixin, ModelAdmin):
     """Business Settings - Configure how your business operates, accepts payments, and delivers orders."""
     
-    list_display = [
-        'name', 'tagline', 'phone', 'email', 'address', 'is_open', 
-        'delivery_fee_base', 'delivery_fee_per_km', 'minimum_order', 'vat_rate', 'last_updated'
-    ]
-    list_editable = [
-        'tagline', 'phone', 'email', 'address', 'is_open',
-        'delivery_fee_base', 'delivery_fee_per_km', 'minimum_order', 'vat_rate'
-    ]
-    list_display_links = ['name']  # Make 'name' the link to detail page (cannot be editable)
+    # Remove list_display and list_editable since we'll redirect to change view
+    list_display = ['name', 'tagline', 'phone', 'email', 'is_open', 'last_updated']
+    list_display_links = ['name']
     readonly_fields = ['created_at', 'updated_at', 'domain']
     search_fields = ['name', 'tagline', 'address', 'phone', 'email', 'website', 'description']
     list_filter = ['is_open', 'accepts_cash', 'accepts_card', 'accepts_mobile_money', 'updated_at']
     ordering = ['-updated_at']
+    
+    def changelist_view(self, request, extra_context=None):
+        """Redirect to change view if there's only one business settings object."""
+        queryset = self.get_queryset(request)
+        if queryset.count() == 1:
+            obj = queryset.first()
+            from django.shortcuts import redirect
+            return redirect(f'{obj.pk}/change/')
+        return super().changelist_view(request, extra_context)
     
     fieldsets = (
         ('About Your Business', {
@@ -262,21 +202,12 @@ class RoschiBusinessSettingsAdmin(BusinessAdminMixin, ModelAdmin):
             'fields': ('opening_time', 'closing_time', 'is_open', 'opening_hours'),
             'description': 'When customers can place orders'
         }),
-        ('Delivery & Pricing', {
+        ('Pricing', {
             'fields': (
-                'delivery_radius', 
                 'minimum_order', 
-                'delivery_fee_base',
-                'delivery_fee_per_km',
-                'pickup_delivery_fee',
-                'free_delivery_threshold',
                 'vat_rate'
             ),
-            'description': 'Set delivery fees, minimum order amount, and tax rate. Delivery fee = Base fee + (Distance × Per kilometer)'
-        }),
-        ('Accepted Payment Methods', {
-            'fields': ('accepts_cash', 'accepts_card', 'accepts_mobile_money'),
-            'description': 'Choose which payment methods your customers can use'
+            'description': 'Set minimum order amount and tax rate (VAT).'
         }),
         ('Social Media Links', {
             'fields': ('facebook_url', 'instagram_url', 'twitter_url'),
@@ -334,10 +265,6 @@ class RoschiBusinessSettingsAdmin(BusinessAdminMixin, ModelAdmin):
         if 'favicon' in form.base_fields:
             form.base_fields['favicon'].label = 'Favicon'
             form.base_fields['favicon'].help_text = 'Small icon displayed in browser tabs (optional)'
-        
-        if 'pickup_delivery_fee' in form.base_fields:
-            form.base_fields['pickup_delivery_fee'].label = 'Pickup Order Fee (₦)'
-            form.base_fields['pickup_delivery_fee'].help_text = 'Fee charged for pickup orders (usually ₦0)'
         
         if 'free_delivery_threshold' in form.base_fields:
             form.base_fields['free_delivery_threshold'].label = 'Free Delivery Threshold (₦)'
@@ -407,33 +334,15 @@ class RoschiBusinessSettingsAdmin(BusinessAdminMixin, ModelAdmin):
             form.base_fields['minimum_order'].label = 'Minimum Order Amount (₦)'
             form.base_fields['minimum_order'].help_text = 'Customers must order at least this amount (set to 0 for no minimum)'
         
-        if 'delivery_fee_base' in form.base_fields:
-            form.base_fields['delivery_fee_base'].label = 'Base Delivery Fee (₦)'
-            form.base_fields['delivery_fee_base'].help_text = 'Fixed amount charged for all deliveries (e.g., ₦500)'
-        
-        if 'delivery_fee_per_km' in form.base_fields:
-            form.base_fields['delivery_fee_per_km'].label = 'Additional Fee Per Kilometer (₦)'
-            form.base_fields['delivery_fee_per_km'].help_text = 'Extra charge for each kilometer of distance (e.g., ₦100 per km). Set to 0 for fixed fee only.'
-        
         if 'vat_rate' in form.base_fields:
             form.base_fields['vat_rate'].label = 'Tax Rate (VAT)'
             form.base_fields['vat_rate'].help_text = 'Tax percentage as decimal (e.g., 0.075 for 7.5% tax)'
         
-        if 'accepts_cash' in form.base_fields:
-            form.base_fields['accepts_cash'].label = 'Accept Cash on Delivery'
-            form.base_fields['accepts_cash'].help_text = 'Allow customers to pay with cash when order is delivered'
-        
-        if 'accepts_card' in form.base_fields:
-            form.base_fields['accepts_card'].label = 'Accept Card Payments'
-            form.base_fields['accepts_card'].help_text = 'Allow customers to pay with debit/credit cards online'
-        
-        if 'accepts_mobile_money' in form.base_fields:
-            form.base_fields['accepts_mobile_money'].label = 'Accept Mobile Money'
-            form.base_fields['accepts_mobile_money'].help_text = 'Allow customers to pay with mobile money transfers'
+        # Payment method fields removed for Roschi - only in ChopsticksBusinessSettingsAdmin
         
         return form
     
-    actions = ['enable_free_delivery', 'disable_free_delivery']
+    actions = []
     
     def get_queryset(self, request):
         """Show only this business's settings."""
@@ -470,48 +379,81 @@ class RoschiBusinessSettingsAdmin(BusinessAdminMixin, ModelAdmin):
         return obj.updated_at.strftime('%B %d, %Y')
     last_updated.short_description = 'Last Updated'
     
-    def delivery_fee_info(self, obj):
-        """How delivery fees are calculated."""
-        if obj.delivery_fee_base and obj.delivery_fee_per_km:
-            return f"₦{obj.delivery_fee_base:,.2f} + ₦{obj.delivery_fee_per_km:,.2f} per km"
-        elif obj.delivery_fee_base:
-            return f"Fixed: ₦{obj.delivery_fee_base:,.2f}"
-        else:
-            return "Free delivery"
-    delivery_fee_info.short_description = "Delivery Fee Structure"
-    
-    def current_delivery_fee(self, obj):
-        """Example delivery fees for different distances."""
-        if obj.delivery_fee_base and obj.delivery_fee_per_km:
-            example_5km = obj.delivery_fee_base + (5 * obj.delivery_fee_per_km)
-            example_10km = obj.delivery_fee_base + (10 * obj.delivery_fee_per_km)
-            return f"5km: ₦{example_5km:,.2f} | 10km: ₦{example_10km:,.2f}"
-        elif obj.delivery_fee_base:
-            return f"Fixed: ₦{obj.delivery_fee_base:,.2f}"
-        else:
-            return "Free delivery"
-    current_delivery_fee.short_description = "Example Fees"
-    
-    def enable_free_delivery(self, request, queryset):
-        """Make delivery free for all customers (set delivery fees to ₦0)."""
-        count = queryset.update(delivery_fee_base=0.00, delivery_fee_per_km=0.00)
-        self.message_user(request, '✓ Free delivery enabled. Customers will not be charged for delivery.')
-    enable_free_delivery.short_description = "✓ Enable Free Delivery"
-    
-    def disable_free_delivery(self, request, queryset):
-        """Start charging delivery fees again (use default fees)."""
-        from django.conf import settings
-        count = queryset.update(
-            delivery_fee_base=getattr(settings, 'DEFAULT_DELIVERY_FEE_BASE', 2000.00),
-            delivery_fee_per_km=getattr(settings, 'DEFAULT_DELIVERY_FEE_PER_KM', 150.00)
-        )
-        self.message_user(request, '✓ Delivery fees restored. Customers will be charged for delivery.')
-    disable_free_delivery.short_description = "✓ Restore Delivery Fees"
 
 
 # Chopsticks & Bowls Admin Class - Business Settings (with QR/Loyalty features)
 class ChopsticksBusinessSettingsAdmin(RoschiBusinessSettingsAdmin):
     """Business Settings for Chopsticks & Bowls - includes QR code and loyalty features."""
+    
+    # Override fieldsets to include Delivery & Pricing and Payment Methods sections
+    fieldsets = (
+        ('About Your Business', {
+            'fields': ('name', 'tagline', 'description', 'address', 'phone', 'email', 'website', 'domain'),
+            'description': 'Basic information that customers will see about your business'
+        }),
+        ('Branding', {
+            'fields': ('logo', 'favicon'),
+            'description': 'Upload your business logo and favicon'
+        }),
+        ('Payment Setup', {
+            'fields': ('paystack_secret_key', 'paystack_public_key', 'paystack_webhook_secret'),
+            'description': 'Paystack payment account settings. Get these from your Paystack dashboard. Contact support if you need help.'
+        }),
+        ('Your Business Location', {
+            'fields': ('restaurant_latitude', 'restaurant_longitude'),
+            'description': 'Your business address coordinates. Used to calculate delivery distances and fees. You can find these on Google Maps.'
+        }),
+        ('When Are You Open?', {
+            'fields': ('opening_time', 'closing_time', 'is_open', 'opening_hours'),
+            'description': 'When customers can place orders'
+        }),
+        ('Delivery & Pricing', {
+            'fields': (
+                'delivery_radius', 
+                'minimum_order', 
+                'free_delivery_threshold',
+                'vat_rate'
+            ),
+            'description': 'Set delivery radius, minimum order amount, and tax rate.'
+        }),
+        ('Accepted Payment Methods', {
+            'fields': ('accepts_cash', 'accepts_card', 'accepts_mobile_money'),
+            'description': 'Choose which payment methods your customers can use'
+        }),
+        ('Social Media Links', {
+            'fields': ('facebook_url', 'instagram_url', 'twitter_url'),
+            'description': 'Links to your social media pages (optional)'
+        }),
+        ('SEO & Meta Information', {
+            'fields': ('meta_title', 'meta_description', 'meta_keywords'),
+            'description': 'SEO settings for search engines (optional)',
+            'classes': ('collapse',)
+        }),
+        ('System Settings', {
+            'fields': ('maintenance_mode', 'maintenance_message'),
+            'description': 'Temporarily disable your site for maintenance',
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_form(self, request, obj=None, **kwargs):
+        """Add user-friendly help text to form fields, including payment methods."""
+        form = super().get_form(request, obj, **kwargs)
+        
+        # Add payment method help text for Chopsticks
+        if 'accepts_cash' in form.base_fields:
+            form.base_fields['accepts_cash'].label = 'Accept Cash on Delivery'
+            form.base_fields['accepts_cash'].help_text = 'Allow customers to pay with cash when order is delivered'
+        
+        if 'accepts_card' in form.base_fields:
+            form.base_fields['accepts_card'].label = 'Accept Card Payments'
+            form.base_fields['accepts_card'].help_text = 'Allow customers to pay with debit/credit cards online'
+        
+        if 'accepts_mobile_money' in form.base_fields:
+            form.base_fields['accepts_mobile_money'].label = 'Accept Mobile Money'
+            form.base_fields['accepts_mobile_money'].help_text = 'Allow customers to pay with mobile money transfers'
+        
+        return form
     
     actions = ['reset_delivery_fees', 'enable_free_delivery', 'disable_free_delivery', 'set_nigerian_city_coordinates']
     
