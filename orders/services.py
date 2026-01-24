@@ -138,7 +138,8 @@ def calculate_cart_totals(
     # Calculate final total
     discount_amount = discount_amount + total_reward_discount
     final_total = total - discount_amount
-    if final_total < django_settings.MINIMUM_ORDER_AMOUNT:
+    # Ensure final total meets minimum order requirement for this business
+    if final_total < restaurant_settings.minimum_order:
         final_total = restaurant_settings.minimum_order
     
     return {

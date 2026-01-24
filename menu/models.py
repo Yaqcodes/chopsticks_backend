@@ -5,8 +5,14 @@ from core.models import RestaurantSettings
 
 
 class Category(models.Model):
-    """Menu category model."""
+    """Menu category model - business-scoped."""
     
+    restaurant_settings = models.ForeignKey(
+        RestaurantSettings,
+        on_delete=models.CASCADE,
+        related_name='categories',
+        help_text="Business this category belongs to"
+    )
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     image = models.ImageField(upload_to='categories/', blank=True, null=True)
@@ -19,9 +25,12 @@ class Category(models.Model):
         verbose_name = 'Product Category'
         verbose_name_plural = 'Product Categories'
         ordering = ['sort_order', 'name']
+        indexes = [
+            models.Index(fields=['restaurant_settings', 'is_active', 'sort_order']),
+        ]
     
     def __str__(self):
-        return self.name
+        return f"{self.name} - {self.restaurant_settings.name}"
 
 
 class MenuItem(models.Model):

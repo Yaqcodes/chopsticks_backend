@@ -11,12 +11,13 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
 
-def validate_google_oauth_token(access_token):
+def validate_google_oauth_token(access_token, restaurant_settings):
     """
-    Validate Google OAuth access token and return user information.
+    Validate Google OAuth access token and return user information (business-scoped).
     
     Args:
         access_token (str): Google OAuth access token
+        restaurant_settings: RestaurantSettings instance with OAuth credentials
         
     Returns:
         dict: User information from Google
@@ -24,13 +25,18 @@ def validate_google_oauth_token(access_token):
     Raises:
         ValidationError: If token is invalid or expired
     """
+    if not restaurant_settings or not restaurant_settings.google_oauth_client_id:
+        raise ValidationError('OAuth credentials not configured for this business')
+    
+    client_id = restaurant_settings.google_oauth_client_id
+    
     try:
         # First, try to validate the token using Google's ID token validation
         # This is more secure than just using the access token
         id_info = id_token.verify_oauth2_token(
             access_token, 
             google_requests.Request(), 
-            settings.SOCIAL_AUTH_GOOGLE_OAUTH2_KEY
+            client_id
         )
         
         # Verify the token was issued by Google
@@ -38,7 +44,7 @@ def validate_google_oauth_token(access_token):
             raise ValidationError('Invalid token issuer')
             
         # Verify the token is for our app
-        if id_info['aud'] != settings.SOCIAL_AUTH_GOOGLE_OAUTH2_KEY:
+        if id_info['aud'] != client_id:
             raise ValidationError('Invalid token audience')
             
         return {
@@ -78,14 +84,23 @@ def validate_google_oauth_token(access_token):
             raise ValidationError(f'Google token validation failed: {str(e)}')
 
 
-def get_google_oauth_url():
+def get_google_oauth_url(restaurant_settings):
     """
-    Get Google OAuth authorization URL for frontend.
+    Get Google OAuth authorization URL for frontend (business-scoped).
     
+    Args:
+        restaurant_settings: RestaurantSettings instance with OAuth credentials
+        
     Returns:
         str: Google OAuth authorization URL
+        
+    Raises:
+        ValueError: If OAuth credentials are not configured
     """
-    client_id = settings.SOCIAL_AUTH_GOOGLE_OAUTH2_KEY
+    if not restaurant_settings or not restaurant_settings.google_oauth_client_id:
+        raise ValueError('OAuth credentials not configured for this business')
+    
+    client_id = restaurant_settings.google_oauth_client_id
     redirect_uri = f"{settings.OAUTH_BASE_URL}/api/auth/google/callback/"
     scope = "openid email profile"
     
@@ -102,12 +117,13 @@ def get_google_oauth_url():
     return f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
 
 
-def exchange_code_for_token(authorization_code):
+def exchange_code_for_token(authorization_code, restaurant_settings):
     """
-    Exchange authorization code for access token.
+    Exchange authorization code for access token (business-scoped).
     
     Args:
         authorization_code (str): The authorization code from Google OAuth callback
+        restaurant_settings: RestaurantSettings instance with OAuth credentials
         
     Returns:
         str: Access token from Google
@@ -115,9 +131,14 @@ def exchange_code_for_token(authorization_code):
     Raises:
         ValidationError: If token exchange fails
     """
+    if not restaurant_settings or not restaurant_settings.google_oauth_client_id:
+        raise ValidationError('OAuth credentials not configured for this business')
+    
     try:
-        client_id = settings.SOCIAL_AUTH_GOOGLE_OAUTH2_KEY
-        client_secret = settings.SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET
+        client_id = restaurant_settings.google_oauth_client_id
+        client_secret = restaurant_settings.google_oauth_client_secret
+        if not client_secret:
+            raise ValidationError('OAuth client secret not configured for this business')
         redirect_uri = f"{settings.OAUTH_BASE_URL}/api/auth/google/callback/"
         
         token_url = "https://oauth2.googleapis.com/token"

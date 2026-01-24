@@ -39,12 +39,13 @@ class PaystackService:
     """Service class for Paystack API interactions."""
     
     def __init__(self, secret_key=None, public_key=None, base_url=None, webhook_secret=None):
-        self.secret_key = secret_key or settings.PAYSTACK_SECRET_KEY
-        self.public_key = public_key or getattr(settings, 'PAYSTACK_PUBLIC_KEY', None)
+        # Paystack keys must be provided (business-specific from RestaurantSettings)
+        if not secret_key:
+            raise ValueError("Paystack secret key is required. Must be provided from RestaurantSettings.")
+        self.secret_key = secret_key
+        self.public_key = public_key
         self.base_url = base_url or settings.PAYSTACK_BASE_URL
         self.webhook_secret = webhook_secret
-        if not self.secret_key:
-            raise ValueError("Paystack secret key is required")
         self.headers = {
             'Authorization': f'Bearer {self.secret_key}',
             'Content-Type': 'application/json',

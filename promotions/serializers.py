@@ -26,11 +26,19 @@ class PromoCodeValidationSerializer(serializers.Serializer):
     order_amount = serializers.DecimalField(max_digits=10, decimal_places=2)
     
     def validate_code(self, value):
-        """Validate that the promo code exists and is valid."""
+        """Validate that the promo code exists and is valid for the current business."""
+        from core.utils import get_business_from_request
+        
         try:
-            promo_code = PromoCode.objects.get(code=value.upper())
+            restaurant_settings = get_business_from_request(self.context['request'])
+            promo_code = PromoCode.objects.get(
+                code=value.upper(),
+                restaurant_settings=restaurant_settings
+            )
         except PromoCode.DoesNotExist:
             raise serializers.ValidationError("Invalid promotional code.")
+        except ValueError as e:
+            raise serializers.ValidationError(f"Business identification failed: {str(e)}")
         
         if not promo_code.is_valid:
             raise serializers.ValidationError("This promotional code is not currently valid.")
@@ -38,13 +46,19 @@ class PromoCodeValidationSerializer(serializers.Serializer):
         return value
     
     def validate(self, attrs):
-        """Validate promo code for the specific order and user."""
+        """Validate promo code for the specific order and user (business-scoped)."""
+        from core.utils import get_business_from_request
+        
         code = attrs['code']
         order_amount = attrs['order_amount']
         user = self.context['request'].user
         
         try:
-            promo_code = PromoCode.objects.get(code=code.upper())
+            restaurant_settings = get_business_from_request(self.context['request'])
+            promo_code = PromoCode.objects.get(
+                code=code.upper(),
+                restaurant_settings=restaurant_settings
+            )
             
             # Check if valid for user
             if not promo_code.is_valid_for_user(user):
@@ -64,6 +78,8 @@ class PromoCodeValidationSerializer(serializers.Serializer):
             
         except PromoCode.DoesNotExist:
             raise serializers.ValidationError("Invalid promotional code.")
+        except ValueError as e:
+            raise serializers.ValidationError(f"Business identification failed: {str(e)}")
         
         return attrs
 

@@ -6,20 +6,89 @@ from core.models import RestaurantSettings
 from decimal import Decimal
 
 
-def generate_order_number():
-    """Generate a unique order number in format ORD-001."""
-    last_order = Order.objects.order_by('-order_number').first()
-    if last_order:
-        # Extract number from last order number
-        try:
-            last_num = int(last_order.order_number.split('-')[1])
-            new_num = last_num + 1
-        except (IndexError, ValueError):
-            new_num = 1
-    else:
-        new_num = 1
+def generate_order_number(restaurant_settings, max_retries=5):
+    """
+    Generate a unique order number per business in format ORD-001.
     
-    return f"ORD-{new_num:03d}"
+    Uses database-level locking (SELECT FOR UPDATE) to prevent race conditions.
+    Implements retry logic for concurrent order creation.
+    
+    Args:
+        restaurant_settings: RestaurantSettings instance (required for multi-tenant)
+        max_retries: Maximum number of retry attempts (default: 5)
+    
+    Returns:
+        str: Unique order number for the business (e.g., "ORD-001")
+    
+    Raises:
+        ValueError: If restaurant_settings is not provided
+        RuntimeError: If unable to generate unique order number after retries
+    """
+    if not restaurant_settings:
+        raise ValueError("restaurant_settings is required for tenant-scoped order number generation")
+    
+    from django.db import transaction
+    import time
+    import random
+    
+    for attempt in range(max_retries):
+        try:
+            with transaction.atomic():
+                # Use SELECT FOR UPDATE to lock the row and prevent concurrent access
+                # This ensures only one transaction can generate an order number at a time
+                last_order = Order.objects.filter(
+                    restaurant_settings=restaurant_settings
+                ).select_for_update().order_by('-order_number').first()
+                
+                if last_order:
+                    # Extract number from last order number
+                    try:
+                        last_num = int(last_order.order_number.split('-')[1])
+                        new_num = last_num + 1
+                    except (IndexError, ValueError):
+                        # If order number format is invalid, start from 1
+                        new_num = 1
+                else:
+                    # No previous orders for this business
+                    new_num = 1
+                
+                order_number = f"ORD-{new_num:03d}"
+                
+                # Verify uniqueness (double-check with database constraint)
+                # This is a safety check - the unique_together constraint will catch duplicates
+                exists = Order.objects.filter(
+                    restaurant_settings=restaurant_settings,
+                    order_number=order_number
+                ).exists()
+                
+                if exists:
+                    # If somehow a duplicate exists, increment and try again
+                    new_num += 1
+                    order_number = f"ORD-{new_num:03d}"
+                
+                return order_number
+                
+        except Exception as e:
+            # Log the error but retry
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Error generating order number (attempt {attempt + 1}/{max_retries}): {str(e)}"
+            )
+            
+            if attempt < max_retries - 1:
+                # Exponential backoff with jitter to prevent thundering herd
+                wait_time = (2 ** attempt) * 0.1 + random.uniform(0, 0.1)
+                time.sleep(wait_time)
+            else:
+                # Last attempt failed
+                raise RuntimeError(
+                    f"Failed to generate unique order number after {max_retries} attempts. "
+                    f"Last error: {str(e)}"
+                )
+    
+    # Should never reach here, but just in case
+    raise RuntimeError("Failed to generate unique order number")
 
 
 class Order(models.Model):
@@ -49,7 +118,9 @@ class Order(models.Model):
     ]
     
     # Order identification
-    order_number = models.CharField(max_length=20, unique=True, default=generate_order_number)
+    # Note: order_number is unique per business (restaurant_settings), not globally unique
+    # Use unique_together constraint in Meta class
+    order_number = models.CharField(max_length=20)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='orders', null=True, blank=True)
     restaurant_settings = models.ForeignKey(
         RestaurantSettings,
@@ -93,13 +164,32 @@ class Order(models.Model):
         verbose_name = 'Order'
         verbose_name_plural = 'Orders'
         ordering = ['-created_at']
+        # Order numbers are unique per business (tenant-scoped)
+        unique_together = [('restaurant_settings', 'order_number')]
+        # Add index for faster lookups
+        indexes = [
+            models.Index(fields=['restaurant_settings', 'order_number']),
+            models.Index(fields=['restaurant_settings', '-created_at']),
+        ]
     
     def __str__(self):
         return f"{self.order_number} - {self.get_customer_name()}"
     
     def save(self, *args, **kwargs):
-        if not self.order_number:
-            self.order_number = generate_order_number()
+        """
+        Save order with automatic order number generation if not set.
+        Ensures restaurant_settings is set before generating order number.
+        """
+        # Validate restaurant_settings is set
+        if not self.restaurant_settings:
+            raise ValueError(
+                "Order must have restaurant_settings set before saving. "
+                "This is required for multi-tenant order number generation."
+            )
+        
+        # Generate order number if not set (only for new orders)
+        if not self.order_number and not self.pk:
+            self.order_number = generate_order_number(self.restaurant_settings)
         
         # Only calculate totals if the order has been saved and has items
         # This prevents the error when creating new orders

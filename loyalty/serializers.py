@@ -43,10 +43,15 @@ class RewardSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'is_available', 'can_redeem']
     
     def get_can_redeem(self, obj):
-        """Check if current user can redeem this reward."""
+        """Check if current user can redeem this reward (business-scoped)."""
         user = self.context['request'].user
         if user.is_authenticated:
-            return obj.can_be_redeemed_by(user)
+            try:
+                from core.utils import get_business_from_request
+                restaurant_settings = get_business_from_request(self.context['request'])
+                return obj.can_be_redeemed_by(user, restaurant_settings)
+            except (ValueError, AttributeError):
+                return False
         return False
 
 
@@ -89,17 +94,26 @@ class RewardRedemptionSerializer(serializers.Serializer):
     reward_id = serializers.IntegerField()
     
     def validate_reward_id(self, value):
-        """Validate that the reward exists and can be redeemed."""
+        """Validate that the reward exists and can be redeemed (business-scoped)."""
+        from core.utils import get_business_from_request
+        
         try:
-            reward = Reward.objects.get(id=value)
+            restaurant_settings = get_business_from_request(self.context['request'])
+            reward = Reward.objects.get(
+                id=value,
+                restaurant_settings=restaurant_settings
+            )
         except Reward.DoesNotExist:
             raise serializers.ValidationError("Reward not found.")
+        except ValueError as e:
+            raise serializers.ValidationError(f"Business identification failed: {str(e)}")
         
         if not reward.is_available:
             raise serializers.ValidationError("Reward is not available for redemption.")
         
         user = self.context['request'].user
-        if not reward.can_be_redeemed_by(user):
+        restaurant_settings = get_business_from_request(self.context['request'])
+        if not reward.can_be_redeemed_by(user, restaurant_settings):
             raise serializers.ValidationError("Insufficient points to redeem this reward.")
         
         return value
@@ -180,27 +194,45 @@ class LoyaltyCardSerializer(serializers.ModelSerializer):
         read_only_fields = ['qr_code', 'created_at', 'last_scan']
     
     def get_loyalty_tier(self, obj):
-        """Get user's loyalty tier."""
+        """Get user's loyalty tier (business-scoped)."""
         from .services import get_user_loyalty_tier
-        return get_user_loyalty_tier(obj.user)
+        try:
+            restaurant_settings = obj.restaurant_settings
+            return get_user_loyalty_tier(obj.user, restaurant_settings)
+        except:
+            return 'bronze'
     
     def get_tier_benefits(self, obj):
-        """Get benefits for user's loyalty tier."""
+        """Get benefits for user's loyalty tier (business-scoped)."""
         from .services import get_user_loyalty_tier, get_tier_benefits
-        tier = get_user_loyalty_tier(obj.user)
-        return get_tier_benefits(tier)
+        try:
+            restaurant_settings = obj.restaurant_settings
+            tier = get_user_loyalty_tier(obj.user, restaurant_settings)
+            return get_tier_benefits(tier)
+        except:
+            return get_tier_benefits('bronze')
     
     def get_points_balance(self, obj):
-        """Get user's current points balance."""
+        """Get user's current points balance (business-scoped)."""
         try:
-            return obj.user.points.balance
+            from .models import UserPoints
+            user_points = UserPoints.objects.get(
+                user=obj.user,
+                restaurant_settings=obj.restaurant_settings
+            )
+            return user_points.balance
         except:
             return 0
     
     def get_points_total_earned(self, obj):
-        """Get user's total points earned."""
+        """Get user's total points earned (business-scoped)."""
         try:
-            return obj.user.points.total_earned
+            from .models import UserPoints
+            user_points = UserPoints.objects.get(
+                user=obj.user,
+                restaurant_settings=obj.restaurant_settings
+            )
+            return user_points.total_earned
         except:
             return 0
 

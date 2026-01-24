@@ -66,21 +66,45 @@ def initialize_payment(request):
             callback_url=callback_url
         )
         
-        # Create Payment record
-        payment = Payment.objects.create(
-            reference=result['reference'],
-            order=order,
-            amount=order.total_amount,
-            amount_kobo=order.get_paystack_amount(),
-            access_code=result['access_code'],
-            authorization_url=result['authorization_url'],
-            customer_email=order.get_customer_email()
-        )
+        # Create Payment record and update order atomically
+        from django.db import transaction
         
-        # Update order with Paystack reference
-        order.paystack_reference = result['reference']
-        order.paystack_access_code = result['access_code']
-        order.save()
+        try:
+            with transaction.atomic():
+                # Lock order to prevent concurrent payment initialization
+                order = Order.objects.select_for_update().get(id=order.id)
+                
+                # Check if payment already initialized
+                if order.paystack_reference:
+                    logger.warning(f"Order {order.id} already has payment reference: {order.paystack_reference}")
+                    # Return existing payment info
+                    existing_payment = Payment.objects.filter(order=order).first()
+                    if existing_payment:
+                        return Response({
+                            'authorization_url': existing_payment.authorization_url,
+                            'reference': existing_payment.reference,
+                            'access_code': existing_payment.access_code,
+                            'public_key': restaurant_settings.paystack_public_key
+                        })
+                
+                # Create Payment record
+                payment = Payment.objects.create(
+                    reference=result['reference'],
+                    order=order,
+                    amount=order.total_amount,
+                    amount_kobo=order.get_paystack_amount(),
+                    access_code=result['access_code'],
+                    authorization_url=result['authorization_url'],
+                    customer_email=order.get_customer_email()
+                )
+                
+                # Update order with Paystack reference atomically
+                order.paystack_reference = result['reference']
+                order.paystack_access_code = result['access_code']
+                order.save()
+        except Exception as e:
+            logger.error(f"Error initializing payment in transaction: {str(e)}")
+            raise
         
         return Response({
             'authorization_url': result['authorization_url'],
@@ -115,29 +139,41 @@ def verify_payment(request, reference):
         paystack = PaystackService(secret_key=restaurant_settings.paystack_secret_key)
         result = paystack.verify_transaction(reference)
         
-        # Update payment status
-        payment.paystack_status = result.get('status', '')
-        payment.verified_at = timezone.now()
+        # Update payment and order status atomically
+        from django.db import transaction
         
-        if result.get('status') == 'success':
-            payment.status = 'success'
-            
-            # Update order status
-            order = payment.order
-            order.payment_status = 'paid'
-            order.payment_verified_at = timezone.now()
-            order.save()
-            
-            # Award loyalty points
-            if order.user:
-                award_points_for_order(order)
-            
-        else:
-            payment.status = 'failed'
-            payment.order.payment_status = 'failed'
-            payment.order.save()
-        
-        payment.save()
+        try:
+            with transaction.atomic():
+                # Lock payment and order rows to prevent concurrent updates
+                payment = Payment.objects.select_for_update().get(id=payment.id)
+                order = payment.order
+                order = Order.objects.select_for_update().get(id=order.id)
+                
+                # Update payment status
+                payment.paystack_status = result.get('status', '')
+                payment.verified_at = timezone.now()
+                
+                if result.get('status') == 'success':
+                    payment.status = 'success'
+                    
+                    # Update order status atomically
+                    order.payment_status = 'paid'
+                    order.payment_verified_at = timezone.now()
+                    order.save()
+                    
+                    # Award loyalty points (within transaction)
+                    if order.user:
+                        award_points_for_order(order)
+                    
+                else:
+                    payment.status = 'failed'
+                    order.payment_status = 'failed'
+                    order.save()
+                
+                payment.save()
+        except Exception as e:
+            logger.error(f"Error updating payment status in transaction: {str(e)}")
+            raise
         
         return Response({
             'status': payment.status,
@@ -213,21 +249,41 @@ class PaystackWebhookView(View):
                     logger.error("Invalid webhook signature for reference: %s", reference)
                     return HttpResponse('Invalid signature', status=400)
 
-                # Update existing payment
-                payment.status = 'success'
-                payment.paystack_status = 'success'
-                payment.verified_at = timezone.now()
-                payment.save()
+                # Update payment and order status atomically
+                from django.db import transaction
                 
-                # Update order
-                order = payment.order
-                order.payment_status = 'paid'
-                order.payment_verified_at = timezone.now()
-                order.save()
-                
-                # Award loyalty points
-                if order.user:
-                    award_points_for_order(order)
+                try:
+                    with transaction.atomic():
+                        # Lock payment and order rows to prevent concurrent updates
+                        payment = Payment.objects.select_for_update().get(id=payment.id)
+                        order = payment.order
+                        order = Order.objects.select_for_update().get(id=order.id)
+                        
+                        # Prevent duplicate processing
+                        if payment.status == 'success':
+                            logger.warning(f"Payment {reference} already processed as success")
+                            return HttpResponse('Already processed', status=200)
+                        
+                        # Update payment status
+                        payment.status = 'success'
+                        payment.paystack_status = 'success'
+                        payment.verified_at = timezone.now()
+                        payment.save()
+                        
+                        # Update order status atomically
+                        order.payment_status = 'paid'
+                        order.payment_verified_at = timezone.now()
+                        order.save()
+                        
+                        # Award loyalty points (within transaction)
+                        if order.user:
+                            award_points_for_order(order)
+                        
+                        logger.info("Webhook processed successfully for reference: %s", reference)
+                except Exception as e:
+                    logger.error(f"Error processing webhook in transaction: {str(e)}")
+                    # Don't return error to Paystack - we'll retry later
+                    raise
                 
                 logger.info("Webhook processed successfully for reference: %s", reference)
             

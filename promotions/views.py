@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 
+from core.utils import get_business_from_request
 from .models import PromoCode, PromoCodeUsage
 from .serializers import (
     PromoCodeSerializer, PromoCodeValidationSerializer,
@@ -12,33 +13,45 @@ from .serializers import (
 
 
 class PromoCodeListView(generics.ListAPIView):
-    """List all promotional codes (admin only)."""
+    """List all promotional codes (admin only, filtered by business)."""
     
     permission_classes = [IsAuthenticated]
     serializer_class = PromoCodeSerializer
-    queryset = PromoCode.objects.all()
     
     def get_queryset(self):
-        # Only staff can see all promo codes
+        # Only staff can see promo codes
         if not self.request.user.is_staff:
             return PromoCode.objects.none()
-        return super().get_queryset()
+        
+        # Filter by business
+        try:
+            restaurant_settings = get_business_from_request(self.request)
+            return PromoCode.objects.filter(restaurant_settings=restaurant_settings)
+        except ValueError:
+            return PromoCode.objects.none()
 
 
 class ActivePromotionsView(generics.ListAPIView):
-    """List all active promotional codes."""
+    """List all active promotional codes for the current business."""
     
     permission_classes = [AllowAny]
     serializer_class = ActivePromotionsSerializer
     
     def get_queryset(self):
-        return PromoCode.objects.filter(is_active=True)
+        try:
+            restaurant_settings = get_business_from_request(self.request)
+            return PromoCode.objects.filter(
+                restaurant_settings=restaurant_settings,
+                is_active=True
+            )
+        except ValueError:
+            return PromoCode.objects.none()
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def validate_promo_code(request):
-    """Validate a promotional code for an order."""
+    """Validate a promotional code for an order (business-scoped)."""
     
     serializer = PromoCodeValidationSerializer(data=request.data, context={'request': request})
     if not serializer.is_valid():
@@ -71,10 +84,14 @@ def user_promo_usage(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def promo_code_details(request, code):
-    """Get details of a specific promotional code."""
+    """Get details of a specific promotional code (business-scoped)."""
     
     try:
-        promo_code = PromoCode.objects.get(code=code.upper())
+        restaurant_settings = get_business_from_request(request)
+        promo_code = PromoCode.objects.get(
+            code=code.upper(),
+            restaurant_settings=restaurant_settings
+        )
         
         if not promo_code.is_valid:
             return Response({
@@ -88,6 +105,10 @@ def promo_code_details(request, code):
         return Response({
             'error': 'Promotional code not found.'
         }, status=status.HTTP_404_NOT_FOUND)
+    except ValueError as e:
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['POST'])

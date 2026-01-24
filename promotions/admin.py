@@ -1,21 +1,25 @@
 from django.contrib import admin
+from core.utils import get_business_from_request
 from .models import PromoCode, PromoCodeUsage
 
 
 @admin.register(PromoCode)
 class PromoCodeAdmin(admin.ModelAdmin):
-    """Admin interface for PromoCode model."""
+    """Admin interface for PromoCode model (multi-tenant)."""
     
     list_display = [
-        'code', 'discount_type', 'discount_value', 'is_active', 
+        'code', 'restaurant_settings', 'discount_type', 'discount_value', 'is_active', 
         'current_usage', 'is_valid', 'created_at'
     ]
-    list_filter = ['discount_type', 'is_active', 'valid_from', 'valid_until', 'created_at']
-    search_fields = ['code', 'description']
+    list_filter = ['restaurant_settings', 'discount_type', 'is_active', 'valid_from', 'valid_until', 'created_at']
+    search_fields = ['code', 'description', 'restaurant_settings__name']
     ordering = ['-created_at']
     readonly_fields = ['current_usage', 'created_at']
     
     fieldsets = (
+        ('Business', {
+            'fields': ('restaurant_settings',)
+        }),
         ('Basic Information', {
             'fields': ('code', 'description', 'discount_type', 'discount_value')
         }),
@@ -26,6 +30,27 @@ class PromoCodeAdmin(admin.ModelAdmin):
             'fields': ('is_active', 'valid_from', 'valid_until')
         }),
     )
+    
+    def get_queryset(self, request):
+        """Filter promo codes by business if not superuser."""
+        qs = super().get_queryset(request)
+        if request.user.is_superuser:
+            return qs
+        try:
+            restaurant_settings = get_business_from_request(request)
+            return qs.filter(restaurant_settings=restaurant_settings)
+        except ValueError:
+            return qs.none()
+    
+    def save_model(self, request, obj, form, change):
+        """Set restaurant_settings if not set and user is not superuser."""
+        if not change and not obj.restaurant_settings:
+            try:
+                restaurant_settings = get_business_from_request(request)
+                obj.restaurant_settings = restaurant_settings
+            except ValueError:
+                pass  # Let it fail validation if business can't be identified
+        super().save_model(request, obj, form, change)
     
     actions = ['activate_promo_codes', 'deactivate_promo_codes']
     

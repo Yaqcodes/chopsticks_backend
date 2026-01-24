@@ -139,51 +139,106 @@ class AdminOrderListView(generics.ListAPIView):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def create_order(request):
-    """Create a new order for both authenticated and guest users."""
+    """
+    Create a new order for both authenticated and guest users.
     
+    Uses atomic transactions to ensure data consistency and prevent race conditions.
+    Implements retry logic for concurrent order creation scenarios.
+    """
+    import time
+    import random
+    from django.db import IntegrityError
+    
+    max_retries = 3
+    user_id = request.user.id if request.user.is_authenticated else 'guest'
+    
+    # Security: Validate business identification before processing
     try:
-        # Log the incoming request data for debugging
-        user_id = request.user.id if request.user.is_authenticated else 'guest'
-        logger.info(f"Creating order for user {user_id} with data: {request.data}")
-        
-        serializer = UnifiedOrderSerializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        
-        # Create the order using the serializer
-        order = serializer.save()
-        
-        # Award points for the order (commented out as requested)
-        # if order.user:
-        #     award_points_for_order(order)
-        
-        # Use the serializer to return the response data
+        restaurant_settings = get_business_from_request(request)
+    except ValueError as e:
+        logger.error(f"Business identification failed for order creation: {str(e)}")
+        return Response({
+            'error': 'Unable to identify business. Please ensure your request includes proper headers.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    order = None
+    for attempt in range(max_retries):
         try:
-            response_serializer = OrderDetailSerializer(order)
-            response_data = response_serializer.data
-            logger.info(f"Order {order.order_number} created successfully for user {user_id}")
+            # Log the incoming request data for debugging
+            logger.info(f"Creating order for user {user_id} (attempt {attempt + 1}/{max_retries})")
             
-            return Response({
-                'message': 'Order created successfully.',
-                'order': response_data
-            }, status=status.HTTP_201_CREATED)
+            serializer = UnifiedOrderSerializer(data=request.data, context={'request': request})
+            serializer.is_valid(raise_exception=True)
             
-        except Exception as serialization_error:
-            logger.error(f"Error serializing order response: {serialization_error}")
-            # Return a simplified response if serialization fails
-            return Response({
-                'message': 'Order created successfully.',
-                'order': {
-                    'id': order.id,
-                    'order_number': order.order_number,
-                    'status': order.status,
-                    'total_amount': str(order.total_amount)
-                }
-            }, status=status.HTTP_201_CREATED)
+            # Create the order using the serializer (already uses atomic transaction)
+            order = serializer.save()
             
-    except Exception as e:
-        user_id = request.user.id if request.user.is_authenticated else 'guest'
-        logger.error(f"Error creating order for user {user_id}: {str(e)}")
-        raise
+            # Success - break out of retry loop
+            break
+            
+        except IntegrityError as e:
+            # Handle unique constraint violations (race condition)
+            if 'unique' in str(e).lower() or 'duplicate' in str(e).lower():
+                if attempt < max_retries - 1:
+                    # Exponential backoff with jitter
+                    wait_time = (2 ** attempt) * 0.1 + random.uniform(0, 0.1)
+                    logger.warning(
+                        f"Order number collision detected (attempt {attempt + 1}/{max_retries}). "
+                        f"Retrying after {wait_time:.2f}s..."
+                    )
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    # Last attempt failed
+                    logger.error(f"Failed to create order after {max_retries} attempts due to race condition")
+                    return Response({
+                        'error': 'Order creation failed due to concurrent request. Please try again.'
+                    }, status=status.HTTP_409_CONFLICT)
+            else:
+                # Other integrity error
+                logger.error(f"Integrity error creating order: {str(e)}")
+                raise
+                
+        except Exception as e:
+            # Log and re-raise other exceptions
+            logger.error(f"Error creating order for user {user_id}: {str(e)}")
+            raise
+    
+    # If we get here, order was created successfully
+    if order is None:
+        # This shouldn't happen, but handle it just in case
+        logger.error("Order creation failed but no exception was raised")
+        return Response({
+            'error': 'Order creation failed unexpectedly. Please try again.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    # Award points for the order (commented out as requested)
+    # if order.user:
+    #     award_points_for_order(order)
+    
+    # Use the serializer to return the response data
+    try:
+        response_serializer = OrderDetailSerializer(order)
+        response_data = response_serializer.data
+        logger.info(f"Order {order.order_number} created successfully for user {user_id}")
+        
+        return Response({
+            'message': 'Order created successfully.',
+            'order': response_data
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as serialization_error:
+        logger.error(f"Error serializing order response: {serialization_error}")
+        # Return a simplified response if serialization fails
+        return Response({
+            'message': 'Order created successfully.',
+            'order': {
+                'id': order.id,
+                'order_number': order.order_number,
+                'status': order.status,
+                'total_amount': str(order.total_amount)
+            }
+        }, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])

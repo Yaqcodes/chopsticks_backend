@@ -12,11 +12,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Encoding and locale settings
 DEFAULT_CHARSET = 'utf-8'
 FILE_CHARSET = 'utf-8'
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Africa/Lagos'
-USE_I18N = True
-USE_L10N = True
-USE_TZ = True
 
 # Base URL for backend (used for callbacks, etc.)
 BACKEND_BASE_URL = config('BASE_URL', default='stringtheorylabs.pythonanywhere.com')
@@ -24,18 +19,6 @@ BACKEND_BASE_URL = config('BASE_URL', default='stringtheorylabs.pythonanywhere.c
 # NOTE: FRONTEND_BASE_URL has been removed for strict multi-tenancy.
 # Frontend URLs are now determined from RestaurantSettings.domain via get_frontend_url_from_business().
 # Each business must have its domain configured in RestaurantSettings.
-
-# Production frontend URLs
-PRODUCTION_FRONTEND_URLS = [
-    'https://chopsticks-frontend.vercel.app',
-    'https://chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app',
-    'https://chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app',
-    'https://chopsticksandbowls.com',
-    'https://www.chopsticksandbowls.com',
-    'https://roschi-water.vercel.app',
-    'https://www.roschiwater.com',
-    'https://roschiwater.com',
-]
 
 # Environment Variables for Production (set these on PythonAnywhere):
 # DEBUG=False
@@ -149,10 +132,10 @@ AUTHENTICATION_BACKENDS = [
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Africa/Lagos'
 USE_I18N = True
+USE_L10N = True
 USE_TZ = True
-TIME_ZONE = "Africa/Lagos"
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
@@ -266,10 +249,10 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@chopsticksand
 # Google Maps API
 GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
 
-# Social Authentication settings
-SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = config('SOCIAL_AUTH_GOOGLE_OAUTH2_KEY', default='')
-SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = config('SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET', default='')
-OAUTH_BASE_URL = config('OAUTH_BASE_URL', default='https://stringtheorylabs.pythonanywhere.com')
+# OAuth base URL - derived from BACKEND_BASE_URL (can be overridden via OAUTH_BASE_URL env var)
+# NOTE: OAuth credentials are now business-specific and stored in RestaurantSettings model
+# Each business must have its own Google OAuth credentials configured
+OAUTH_BASE_URL = config('OAUTH_BASE_URL', default=f"https://{BACKEND_BASE_URL}")
 
 SOCIAL_AUTH_FACEBOOK_KEY = config('SOCIAL_AUTH_FACEBOOK_KEY', default='')
 SOCIAL_AUTH_FACEBOOK_SECRET = config('SOCIAL_AUTH_FACEBOOK_SECRET', default='')
@@ -278,11 +261,8 @@ SOCIAL_AUTH_APPLE_ID_CLIENT = config('SOCIAL_AUTH_APPLE_ID_CLIENT', default='')
 SOCIAL_AUTH_APPLE_ID_TEAM = config('SOCIAL_AUTH_APPLE_ID_TEAM', default='')
 SOCIAL_AUTH_APPLE_ID_KEY = config('SOCIAL_AUTH_APPLE_ID_KEY', default='')
 
-# Restaurant settings
-RESTAURANT_NAME = config('RESTAURANT_NAME', default='Chopsticks and Bowls')
-RESTAURANT_ADDRESS = config('RESTAURANT_ADDRESS', default='')
-RESTAURANT_PHONE = config('RESTAURANT_PHONE', default='')
-RESTAURANT_EMAIL = config('RESTAURANT_EMAIL', default='')
+# Restaurant settings - Now handled by RestaurantSettings model
+# These variables are no longer used and have been removed for multi-tenancy
 
 # Points system settings
 POINTS_PER_DOLLAR = config('POINTS_PER_DOLLAR', default=1, cast=int)
@@ -303,15 +283,15 @@ SILVER_TIER_POINTS = config('SILVER_TIER_POINTS', default=50000, cast=int)
 GOLD_TIER_POINTS = config('GOLD_TIER_POINTS', default=100000, cast=int)
 PLATINUM_TIER_POINTS = config('PLATINUM_TIER_POINTS', default=250000, cast=int)
 
-# Order settings - Now handled by RestaurantSettings model
-MINIMUM_ORDER_AMOUNT=config('MINIMUM_ORDER_AMOUNT', default=1000.00, cast=float)
-DEFAULT_DELIVERY_FEE_BASE=config('DELIVERY_FEE_BASE', default=2000.00, cast=float)
-DEFAULT_DELIVERY_FEE_PER_KM=config('DELIVERY_FEE_PER_KM', default=150.00, cast=float)
-DEFAULT_TAX_RATE=config('TAX_RATE', default=0.075, cast=float)
+# Order settings - Defaults for RestaurantSettings model (used when creating new businesses)
+# These are defaults only; each business has its own values in RestaurantSettings
+DEFAULT_DELIVERY_FEE_BASE = config('DELIVERY_FEE_BASE', default=2000.00, cast=float)
+DEFAULT_DELIVERY_FEE_PER_KM = config('DELIVERY_FEE_PER_KM', default=150.00, cast=float)
+DEFAULT_TAX_RATE = config('TAX_RATE', default=0.075, cast=float)
 
 # Paystack payment settings
-PAYSTACK_SECRET_KEY = config('PAYSTACK_SECRET_KEY_TEST', default='')
-PAYSTACK_PUBLIC_KEY = config('PAYSTACK_PUBLIC_KEY_TEST', default='')
+# NOTE: Paystack keys are now business-specific and stored in RestaurantSettings model
+# Each business must have its own Paystack keys configured
 PAYSTACK_CALLBACK_URL = BACKEND_BASE_URL + '/api/payments/callback/'
 PAYSTACK_BASE_URL = config('PAYSTACK_BASE_URL', default='https://api.paystack.co')
 

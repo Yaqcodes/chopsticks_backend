@@ -24,11 +24,10 @@ class CategoryListView(generics.ListAPIView):
     
     def get_queryset(self):
         restaurant_settings = get_business_from_request(self.request)
-        # Only return categories that have menu items for this business
+        # Return categories for this business
         return Category.objects.filter(
             is_active=True,
-            menu_items__restaurant_settings=restaurant_settings,
-            menu_items__is_available=True
+            restaurant_settings=restaurant_settings
         ).distinct()
 
 
@@ -40,11 +39,10 @@ class CategoryDetailView(generics.RetrieveAPIView):
     
     def get_queryset(self):
         restaurant_settings = get_business_from_request(self.request)
-        # Only return categories that have menu items for this business
+        # Return categories for this business
         return Category.objects.filter(
             is_active=True,
-            menu_items__restaurant_settings=restaurant_settings,
-            menu_items__is_available=True
+            restaurant_settings=restaurant_settings
         ).distinct()
 
 
@@ -166,7 +164,12 @@ def menu_by_category(request, category_id):
     
     restaurant_settings = get_business_from_request(request)
     try:
-        category = Category.objects.get(id=category_id, is_active=True)
+        # Validate category belongs to this business
+        category = Category.objects.get(
+            id=category_id,
+            is_active=True,
+            restaurant_settings=restaurant_settings
+        )
     except Category.DoesNotExist:
         return Response({'error': 'Category not found.'}, status=status.HTTP_404_NOT_FOUND)
     

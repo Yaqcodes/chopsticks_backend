@@ -50,16 +50,20 @@ class BusinessAdminMixin:
 class CategoryAdmin(admin.ModelAdmin):
     """Admin interface for Category model."""
     
-    list_display = ['name', 'is_active', 'sort_order', 'menu_items_count', 'created_at']
-    list_filter = ['is_active', 'created_at']
+    list_display = ['name', 'restaurant_settings', 'is_active', 'sort_order', 'menu_items_count', 'created_at']
+    list_filter = ['restaurant_settings', 'is_active', 'created_at']
     search_fields = ['name', 'description']
     ordering = ['sort_order', 'name']
     list_editable = ['is_active', 'sort_order']
     
     def menu_items_count(self, obj):
         """Display count of menu items in category."""
-        return obj.menu_items.count()
+        return obj.menu_items.filter(restaurant_settings=obj.restaurant_settings).count()
     menu_items_count.short_description = 'Menu Items'
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related."""
+        return super().get_queryset(request).select_related('restaurant_settings')
 
 
 @admin.register(MenuItem)
@@ -110,12 +114,20 @@ class RoschiCategoryAdmin(BusinessAdminMixin, ModelAdmin):
     product_count.short_description = 'Number of Products'
     
     def get_queryset(self, request):
-        """Show only categories that have products for this business."""
+        """Show only categories for this business."""
         qs = super().get_queryset(request)
         business_settings = self._get_business_settings()
         if business_settings:
-            return qs.filter(menu_items__restaurant_settings=business_settings).distinct()
+            return qs.filter(restaurant_settings=business_settings)
         return qs.none()
+    
+    def save_model(self, request, obj, form, change):
+        """Automatically link category to this business."""
+        if not obj.restaurant_settings_id:
+            business_settings = self._get_business_settings()
+            if business_settings:
+                obj.restaurant_settings = business_settings
+        super().save_model(request, obj, form, change)
     
     def _get_business_settings(self):
         """Get business settings from the current admin site."""

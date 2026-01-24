@@ -30,6 +30,11 @@ class RestaurantSettingsAdmin(admin.ModelAdmin):
             'fields': ('paystack_secret_key', 'paystack_public_key', 'paystack_webhook_secret'),
             'classes': ('collapse',)
         }),
+        ('OAuth Configuration', {
+            'fields': ('google_oauth_client_id', 'google_oauth_client_secret'),
+            'classes': ('collapse',),
+            'description': 'Google OAuth 2.0 credentials for social authentication. Each business must have its own OAuth credentials.'
+        }),
         ('Restaurant Location', {
             'fields': ('restaurant_latitude', 'restaurant_longitude'),
             'description': 'Coordinates for accurate distance calculations and delivery fee computation. Use decimal degrees format (e.g., 9.05509, 7.44056 for Wuye Branch). Coordinates are validated to be within Nigeria bounds.'
@@ -193,6 +198,11 @@ class RoschiBusinessSettingsAdmin(BusinessAdminMixin, ModelAdmin):
         ('Payment Setup', {
             'fields': ('paystack_secret_key', 'paystack_public_key', 'paystack_webhook_secret'),
             'description': 'Paystack payment account settings. Get these from your Paystack dashboard. Contact support if you need help.'
+        }),
+        ('OAuth Configuration', {
+            'fields': ('google_oauth_client_id', 'google_oauth_client_secret'),
+            'classes': ('collapse',),
+            'description': 'Google OAuth 2.0 credentials for social authentication. Each business must have its own OAuth credentials.'
         }),
         ('Your Business Location', {
             'fields': ('restaurant_latitude', 'restaurant_longitude'),
@@ -398,6 +408,11 @@ class ChopsticksBusinessSettingsAdmin(RoschiBusinessSettingsAdmin):
         ('Payment Setup', {
             'fields': ('paystack_secret_key', 'paystack_public_key', 'paystack_webhook_secret'),
             'description': 'Paystack payment account settings. Get these from your Paystack dashboard. Contact support if you need help.'
+        }),
+        ('OAuth Configuration', {
+            'fields': ('google_oauth_client_id', 'google_oauth_client_secret'),
+            'classes': ('collapse',),
+            'description': 'Google OAuth 2.0 credentials for social authentication. Each business must have its own OAuth credentials.'
         }),
         ('Your Business Location', {
             'fields': ('restaurant_latitude', 'restaurant_longitude'),

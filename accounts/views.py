@@ -190,8 +190,12 @@ class SocialLoginView(generics.GenericAPIView):
         
         try:
             if provider == 'google':
-                # Validate Google OAuth token and get user info
-                google_user_info = validate_google_oauth_token(access_token)
+                # Get business context for OAuth validation
+                from core.utils import get_business_from_request
+                restaurant_settings = get_business_from_request(request)
+                
+                # Validate Google OAuth token and get user info (business-scoped)
+                google_user_info = validate_google_oauth_token(access_token, restaurant_settings)
                 
                 provider_user_id = google_user_info['provider_user_id']
                 email = google_user_info['email']
@@ -358,12 +362,15 @@ def token_refresh_view(request):
 def google_oauth_url(request):
     """Get Google OAuth authorization URL."""
     try:
+        from core.utils import get_business_from_request
         from .google_oauth import get_google_oauth_url
-        oauth_url = get_google_oauth_url()
+        
+        restaurant_settings = get_business_from_request(request)
+        oauth_url = get_google_oauth_url(restaurant_settings)
         
         return Response({
             'oauth_url': oauth_url,
-            'client_id': settings.SOCIAL_AUTH_GOOGLE_OAUTH2_KEY
+            'client_id': restaurant_settings.google_oauth_client_id
         })
     except Exception as e:
         return Response({
@@ -386,13 +393,13 @@ def google_oauth_callback(request):
             # Redirect to frontend with error
             return redirect(f"{frontend_url}/?oauth=error&message=No authorization code received")
         
-        # Exchange the authorization code for an access token
+        # Exchange the authorization code for an access token (business-scoped)
         from .google_oauth import exchange_code_for_token
-        access_token = exchange_code_for_token(code)
+        access_token = exchange_code_for_token(code, restaurant_settings)
         
-        # Use the existing social login logic
+        # Use the existing social login logic (business-scoped)
         from .google_oauth import validate_google_oauth_token
-        google_user_info = validate_google_oauth_token(access_token)
+        google_user_info = validate_google_oauth_token(access_token, restaurant_settings)
         
         provider_user_id = google_user_info['provider_user_id']
         email = google_user_info['email']

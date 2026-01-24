@@ -722,15 +722,32 @@ class GuestOrderSerializer(serializers.ModelSerializer):
                     'total_amount': f'Minimum order amount is ₦{minimum_order:.2f}. Please add more items to your order.'
                 })
         
-        # Create the order with calculated totals
-        order = Order.objects.create(**validated_data)
+        # Create the order with calculated totals using atomic transaction
+        # This ensures order creation and order number generation are atomic
+        from django.db import transaction
         
-        # Create order items
-        for item_data in items_data:
-            menu_item = item_data['menu_item']
-            item_data['unit_price'] = menu_item.price
-            item_data['total_price'] = menu_item.price * item_data['quantity']
-            OrderItem.objects.create(order=order, **item_data)
+        try:
+            with transaction.atomic():
+                # Create the order - order number will be auto-generated in save()
+                order = Order.objects.create(**validated_data)
+                
+                # Create order items within the same transaction
+                for item_data in items_data:
+                    menu_item = item_data['menu_item']
+                    OrderItem.objects.create(
+                        order=order,
+                        menu_item=menu_item,
+                        quantity=item_data['quantity'],
+                        unit_price=menu_item.price,
+                        total_price=menu_item.price * item_data['quantity'],
+                        special_instructions=item_data.get('special_instructions', '')
+                    )
+        except Exception as e:
+            # Log the error and re-raise for proper error handling
+            logger.error(f"Error creating order in transaction: {str(e)}")
+            raise serializers.ValidationError({
+                'detail': f'Failed to create order: {str(e)}'
+            })
         
         return order
     
@@ -1051,8 +1068,31 @@ class OrderSerializer(serializers.ModelSerializer):
                     'total_amount': f'Minimum order amount is ₦{minimum_order:.2f}. Please add more items to your order.'
                 })
         
-        # Create the order with validated totals
-        order = Order.objects.create(**validated_data)
+        # Create the order with validated totals using atomic transaction
+        # This ensures order creation and order number generation are atomic
+        from django.db import transaction
+        
+        try:
+            with transaction.atomic():
+                # Create the order - order number will be auto-generated in save()
+                order = Order.objects.create(**validated_data)
+                
+                # Create order items within the same transaction
+                for item_data in items_data:
+                    OrderItem.objects.create(
+                        order=order,
+                        menu_item=item_data['menu_item'],
+                        quantity=item_data['quantity'],
+                        unit_price=item_data.get('unit_price', item_data['menu_item'].price),
+                        total_price=item_data.get('total_price'),
+                        special_instructions=item_data.get('special_instructions', '')
+                    )
+        except Exception as e:
+            # Log the error and re-raise for proper error handling
+            logger.error(f"Error creating order in transaction: {str(e)}")
+            raise serializers.ValidationError({
+                'detail': f'Failed to create order: {str(e)}'
+            })
         
         # Apply reward if reward_id was provided
         reward_id = validated_data.get('reward_id')
@@ -1095,13 +1135,6 @@ class OrderSerializer(serializers.ModelSerializer):
             except Exception as e:
                 # Log the error but don't fail the order creation
                 logger.error(f"Error applying reward {reward_id} to order {order.id}: {str(e)}")
-        
-        # Create order items
-        for item_data in items_data:
-            menu_item = item_data['menu_item']
-            item_data['unit_price'] = menu_item.price
-            item_data['total_price'] = menu_item.price * item_data['quantity']
-            OrderItem.objects.create(order=order, **item_data)
         
         # Refresh the order to ensure all related fields are loaded
         order.refresh_from_db()

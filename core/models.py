@@ -74,6 +74,18 @@ class RestaurantSettings(models.Model):
     paystack_secret_key = models.CharField(max_length=255, blank=True)
     paystack_public_key = models.CharField(max_length=255, blank=True)
     paystack_webhook_secret = models.CharField(max_length=255, blank=True)
+    
+    # OAuth Configuration (business-specific)
+    google_oauth_client_id = models.CharField(
+        max_length=255, 
+        blank=True,
+        help_text="Google OAuth 2.0 Client ID for this business"
+    )
+    google_oauth_client_secret = models.CharField(
+        max_length=255, 
+        blank=True,
+        help_text="Google OAuth 2.0 Client Secret for this business"
+    )
 
     # Branding
     logo = models.ImageField(upload_to='restaurant/', blank=True, null=True)

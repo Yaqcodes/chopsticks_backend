@@ -7,19 +7,25 @@ from .models import UserPoints, PointsTransaction, Reward, UserReward
 
 
 def award_points_for_order(order):
-    """Award points to user for completing an order."""
+    """Award points to user for completing an order (business-scoped)."""
     
     if not order.user:
         return  # No points for guest orders
     
     try:
-        user_points, created = UserPoints.objects.get_or_create(user=order.user)
+        restaurant_settings = order.restaurant_settings
+        user_points, created = UserPoints.objects.get_or_create(
+            user=order.user,
+            restaurant_settings=restaurant_settings
+        )
         
         # Calculate base points (10 points per Naira)
         base_points = int(order.subtotal * settings.POINTS_PER_DOLLAR)
         
-        # Check for first order bonus
-        is_first_order = order.user.orders.count() == 1
+        # Check for first order bonus (business-scoped)
+        is_first_order = order.user.orders.filter(
+            restaurant_settings=restaurant_settings
+        ).count() == 1
         first_order_bonus = settings.FIRST_ORDER_BONUS_POINTS if is_first_order else 0
         
         # Check for birthday bonus
@@ -44,15 +50,18 @@ def award_points_for_order(order):
         reason = " - ".join(reason_parts)
         user_points.add_points(total_points, reason)
         
-        # Create transaction record with order reference
-        PointsTransaction.objects.create(
+        # Transaction record is created by add_points method with business context
+        # Update the most recent transaction to include order reference
+        transaction = PointsTransaction.objects.filter(
             user=order.user,
-            amount=total_points,
-            transaction_type='earned',
+            restaurant_settings=restaurant_settings,
             reason=reason,
-            balance_after=user_points.balance,
-            order=order
-        )
+            order__isnull=True
+        ).order_by('-created_at').first()
+        
+        if transaction:
+            transaction.order = order
+            transaction.save()
         
         return total_points
     
@@ -62,8 +71,8 @@ def award_points_for_order(order):
         return 0
 
 
-def process_referral_bonus(user, referral_code):
-    """Process referral bonus for a new user."""
+def process_referral_bonus(user, referral_code, restaurant_settings):
+    """Process referral bonus for a new user (business-scoped)."""
     
     try:
         from accounts.models import User
@@ -71,29 +80,36 @@ def process_referral_bonus(user, referral_code):
         # Find the referring user
         referring_user = User.objects.get(referral_code=referral_code)
         
-        # Check if this is the first order for the new user
-        if user.orders.count() == 0:
-            return False  # No orders yet
+        # Check if this is the first order for the new user at this business
+        if user.orders.filter(restaurant_settings=restaurant_settings).count() == 0:
+            return False  # No orders yet at this business
         
-        # Check if referral bonus was already given
+        # Check if referral bonus was already given for this business
         existing_bonus = PointsTransaction.objects.filter(
             user=user,
+            restaurant_settings=restaurant_settings,
             transaction_type='referral',
             reason__contains=referring_user.referral_code
         ).exists()
         
         if existing_bonus:
-            return False  # Bonus already given
+            return False  # Bonus already given for this business
         
-        # Award bonus to both users
+        # Award bonus to both users (business-scoped)
         bonus_points = settings.REFERRAL_BONUS_POINTS
         
         # Award to new user
-        user_points, created = UserPoints.objects.get_or_create(user=user)
+        user_points, created = UserPoints.objects.get_or_create(
+            user=user,
+            restaurant_settings=restaurant_settings
+        )
         user_points.add_points(bonus_points, f"Referral Bonus from {referring_user.referral_code}")
         
         # Award to referring user
-        referring_points, created = UserPoints.objects.get_or_create(user=referring_user)
+        referring_points, created = UserPoints.objects.get_or_create(
+            user=referring_user,
+            restaurant_settings=restaurant_settings
+        )
         referring_points.add_points(bonus_points, f"Referral Bonus for {user.referral_code}")
         
         return True
@@ -105,11 +121,11 @@ def process_referral_bonus(user, referral_code):
         return False
 
 
-def check_reward_eligibility(user, reward):
-    """Check if user is eligible for a specific reward."""
+def check_reward_eligibility(user, reward, restaurant_settings):
+    """Check if user is eligible for a specific reward (business-scoped)."""
     
     try:
-        user_points = user.points
+        user_points = UserPoints.objects.get(user=user, restaurant_settings=restaurant_settings)
         return user_points.balance >= reward.points_required
     except UserPoints.DoesNotExist:
         return False
@@ -156,22 +172,22 @@ def expire_old_rewards():
     return expired_rewards.count()
 
 
-def calculate_points_needed_for_reward(user, reward):
-    """Calculate how many more points a user needs for a specific reward."""
+def calculate_points_needed_for_reward(user, reward, restaurant_settings):
+    """Calculate how many more points a user needs for a specific reward (business-scoped)."""
     
     try:
-        user_points = user.points
+        user_points = UserPoints.objects.get(user=user, restaurant_settings=restaurant_settings)
         points_needed = reward.points_required - user_points.balance
         return max(0, points_needed)
     except UserPoints.DoesNotExist:
         return reward.points_required
 
 
-def get_user_loyalty_tier(user):
-    """Get user's loyalty tier based on total points earned."""
+def get_user_loyalty_tier(user, restaurant_settings):
+    """Get user's loyalty tier based on total points earned (business-scoped)."""
     
     try:
-        user_points = user.points
+        user_points = UserPoints.objects.get(user=user, restaurant_settings=restaurant_settings)
         total_earned = user_points.total_earned
         
         if total_earned >= settings.PLATINUM_TIER_POINTS:
@@ -219,14 +235,17 @@ def get_tier_benefits(tier):
     return benefits.get(tier, benefits['bronze'])
 
 
-def award_points_for_physical_visit(user, visit_amount=None):
-    """Award points to user for physical visit via QR code scan."""
+def award_points_for_physical_visit(user, restaurant_settings, visit_amount=None):
+    """Award points to user for physical visit via QR code scan (business-scoped)."""
     
     if not user:
         return 0
     
     try:
-        user_points, created = UserPoints.objects.get_or_create(user=user)
+        user_points, created = UserPoints.objects.get_or_create(
+            user=user,
+            restaurant_settings=restaurant_settings
+        )
         
         # Base points for physical visit (can be configured)
         base_points = getattr(settings, 'PHYSICAL_VISIT_POINTS', 500)
@@ -247,14 +266,7 @@ def award_points_for_physical_visit(user, visit_amount=None):
         reason = " - ".join(reason_parts)
         user_points.add_points(total_points, reason)
         
-        # Create transaction record
-        PointsTransaction.objects.create(
-            user=user,
-            amount=total_points,
-            transaction_type='physical_visit',
-            reason=reason,
-            balance_after=user_points.balance
-        )
+        # Transaction record is created by add_points method with business context
         
         return total_points
     
@@ -264,14 +276,18 @@ def award_points_for_physical_visit(user, visit_amount=None):
         return 0
 
 
-def scan_loyalty_card(qr_code, visit_amount=None):
-    """Scan a loyalty card QR code and award points."""
+def scan_loyalty_card(qr_code, restaurant_settings, visit_amount=None):
+    """Scan a loyalty card QR code and award points (business-scoped)."""
     
     try:
         from .models import LoyaltyCard
         
-        # Find the loyalty card by QR code
-        loyalty_card = LoyaltyCard.objects.get(qr_code=qr_code, is_active=True)
+        # Find the loyalty card by QR code and business
+        loyalty_card = LoyaltyCard.objects.get(
+            qr_code=qr_code,
+            restaurant_settings=restaurant_settings,
+            is_active=True
+        )
         
         # Check if card was recently scanned (prevent abuse)
         from django.utils import timezone
@@ -287,27 +303,34 @@ def scan_loyalty_card(qr_code, visit_amount=None):
                     'error': f'Card was scanned recently. Please wait {min_scan_interval} minutes between scans.'
                 }
         
-        # Award points
+        # Award points (business-scoped)
         points_awarded = award_points_for_physical_visit(
-            loyalty_card.user, 
+            loyalty_card.user,
+            restaurant_settings,
             visit_amount
         )
         
         # Mark card as scanned
         loyalty_card.scan_card()
         
+        # Get user points balance for this business
+        user_points = UserPoints.objects.get(
+            user=loyalty_card.user,
+            restaurant_settings=restaurant_settings
+        )
+        
         return {
             'success': True,
             'user': loyalty_card.user.email,
             'points_awarded': points_awarded,
-            'new_balance': loyalty_card.user.points.balance,
+            'new_balance': user_points.balance,
             'scan_time': loyalty_card.last_scan
         }
     
     except LoyaltyCard.DoesNotExist:
         return {
             'success': False,
-            'error': 'Invalid or inactive loyalty card QR code.'
+            'error': 'Invalid or inactive loyalty card QR code for this business.'
         }
     except Exception as e:
         return {

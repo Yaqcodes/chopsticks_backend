@@ -17,6 +17,7 @@ from django.contrib import messages
 from django.urls import reverse
 from django.http import HttpResponseRedirect
 
+from core.utils import get_business_from_request
 from .models import UserPoints, PointsTransaction, Reward, UserReward, LoyaltyCard
 from .serializers import (
     UserPointsSerializer, PointsTransactionSerializer, RewardSerializer,
@@ -83,7 +84,11 @@ class UserPointsView(generics.RetrieveAPIView):
         return super().get(request, *args, **kwargs)
     
     def get_object(self):
-        user_points, created = UserPoints.objects.get_or_create(user=self.request.user)
+        restaurant_settings = get_business_from_request(self.request)
+        user_points, created = UserPoints.objects.get_or_create(
+            user=self.request.user,
+            restaurant_settings=restaurant_settings
+        )
         return user_points
 
 
@@ -97,17 +102,28 @@ class PointsHistoryView(generics.ListAPIView):
         # Handle Swagger schema generation
         if getattr(self, 'swagger_fake_view', False):
             return PointsTransaction.objects.none()
-        return PointsTransaction.objects.filter(user=self.request.user)
+        restaurant_settings = get_business_from_request(self.request)
+        return PointsTransaction.objects.filter(
+            user=self.request.user,
+            restaurant_settings=restaurant_settings
+        )
 
 
 class AvailableRewardsView(generics.ListAPIView):
-    """List all available rewards."""
+    """List all available rewards for the current business."""
     
     permission_classes = [IsAuthenticated]
     serializer_class = RewardSerializer
     
     def get_queryset(self):
-        return Reward.objects.filter(is_active=True)
+        try:
+            restaurant_settings = get_business_from_request(self.request)
+            return Reward.objects.filter(
+                restaurant_settings=restaurant_settings,
+                is_active=True
+            )
+        except ValueError:
+            return Reward.objects.none()
 
 
 class UserRewardsView(generics.ListAPIView):
@@ -121,12 +137,21 @@ class UserRewardsView(generics.ListAPIView):
         if getattr(self, 'swagger_fake_view', False):
             return UserReward.objects.none()
         
-        # First, check and update expired rewards for this user
-        user_rewards = UserReward.objects.filter(user=self.request.user, status='active')
+        restaurant_settings = get_business_from_request(self.request)
+        
+        # First, check and update expired rewards for this user at this business
+        user_rewards = UserReward.objects.filter(
+            user=self.request.user,
+            restaurant_settings=restaurant_settings,
+            status='active'
+        )
         for user_reward in user_rewards:
             user_reward.check_and_update_expired_status()
         
-        queryset = UserReward.objects.filter(user=self.request.user)
+        queryset = UserReward.objects.filter(
+            user=self.request.user,
+            restaurant_settings=restaurant_settings
+        )
         
         # Filter by status if provided
         status = self.request.query_params.get('status')
@@ -163,7 +188,7 @@ class UserRewardsView(generics.ListAPIView):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def redeem_reward(request):
-    """Redeem a reward with points."""
+    """Redeem a reward with points (business-scoped)."""
     
     serializer = RewardRedemptionSerializer(data=request.data, context={'request': request})
     if not serializer.is_valid():
@@ -173,10 +198,19 @@ def redeem_reward(request):
     user = request.user
     
     try:
+        restaurant_settings = get_business_from_request(request)
+        
         with transaction.atomic():
-            # Get reward and user points
-            reward = Reward.objects.get(id=reward_id)
-            user_points = get_object_or_404(UserPoints, user=user)
+            # Get reward and user points (validate reward belongs to business)
+            reward = Reward.objects.get(
+                id=reward_id,
+                restaurant_settings=restaurant_settings
+            )
+            user_points = get_object_or_404(
+                UserPoints,
+                user=user,
+                restaurant_settings=restaurant_settings
+            )
             
             # Check if user has enough points
             if user_points.balance < reward.points_required:
@@ -187,10 +221,11 @@ def redeem_reward(request):
             # Spend points
             user_points.spend_points(reward.points_required, f"Redeemed: {reward.name}")
             
-            # Create user reward
+            # Create user reward (business-scoped)
             user_reward = UserReward.objects.create(
                 user=user,
                 reward=reward,
+                restaurant_settings=restaurant_settings,
                 points_spent=reward.points_required
             )
             
@@ -238,7 +273,8 @@ def process_referral_bonus_view(request):
     referral_code = serializer.validated_data['referral_code']
     
     try:
-        success = process_referral_bonus(request.user, referral_code)
+        restaurant_settings = get_business_from_request(request)
+        success = process_referral_bonus(request.user, referral_code, restaurant_settings)
         if success:
             return Response({
                 'message': 'Referral bonus processed successfully.'
@@ -257,20 +293,34 @@ def process_referral_bonus_view(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def loyalty_summary(request):
-    """Get comprehensive loyalty summary for user."""
+    """Get comprehensive loyalty summary for user (business-scoped)."""
     
     user = request.user
     
     try:
-        user_points = UserPoints.objects.get(user=user)
-        recent_transactions = PointsTransaction.objects.filter(user=user)[:5]
-        active_rewards = UserReward.objects.filter(user=user, status='active')
-        available_rewards = Reward.objects.filter(is_active=True)
+        restaurant_settings = get_business_from_request(request)
+        user_points, created = UserPoints.objects.get_or_create(
+            user=user,
+            restaurant_settings=restaurant_settings
+        )
+        recent_transactions = PointsTransaction.objects.filter(
+            user=user,
+            restaurant_settings=restaurant_settings
+        )[:5]
+        active_rewards = UserReward.objects.filter(
+            user=user,
+            restaurant_settings=restaurant_settings,
+            status='active'
+        )
+        available_rewards = Reward.objects.filter(
+            restaurant_settings=restaurant_settings,
+            is_active=True
+        )
         
-        # Calculate available rewards user can redeem
+        # Calculate available rewards user can redeem (business-scoped)
         redeemable_rewards = [
             reward for reward in available_rewards 
-            if reward.can_be_redeemed_by(user)
+            if reward.can_be_redeemed_by(user, restaurant_settings)
         ]
         
         return Response({
@@ -282,17 +332,10 @@ def loyalty_summary(request):
             'referrals_count': user.referrals.count()
         })
     
-    except UserPoints.DoesNotExist:
-        # Create user points if they don't exist
-        user_points = UserPoints.objects.create(user=user)
+    except Exception as e:
         return Response({
-            'points': UserPointsSerializer(user_points).data,
-            'recent_transactions': [],
-            'active_rewards': [],
-            'redeemable_rewards_count': 0,
-            'referral_code': user.referral_code,
-            'referrals_count': 0
-        })
+            'error': f'Failed to retrieve loyalty summary: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
@@ -301,7 +344,14 @@ def use_reward(request, reward_id):
     """Use a redeemed reward in an order."""
     
     try:
-        user_reward = get_object_or_404(UserReward, id=reward_id, user=request.user, status='active')
+        restaurant_settings = get_business_from_request(request)
+        user_reward = get_object_or_404(
+            UserReward,
+            id=reward_id,
+            user=request.user,
+            restaurant_settings=restaurant_settings,
+            status='active'
+        )
         
         # Mark reward as used
         user_reward.use_reward()
@@ -354,8 +404,11 @@ def scan_loyalty_card_view(request):
     visit_amount = serializer.validated_data.get('visit_amount')
     visit_type = serializer.validated_data['visit_type']
     
-    # Scan the loyalty card
-    result = scan_loyalty_card(qr_code, visit_amount, visit_type)
+    # Get business context
+    restaurant_settings = get_business_from_request(request)
+    
+    # Scan the loyalty card (business-scoped)
+    result = scan_loyalty_card(qr_code, restaurant_settings, visit_amount)
     
     if result['success']:
         return Response({
@@ -377,8 +430,12 @@ def get_loyalty_card(request):
     """Get user's loyalty card information with tier details."""
     
     try:
-        # Get or create loyalty card
-        loyalty_card, created = LoyaltyCard.objects.get_or_create(user=request.user)
+        restaurant_settings = get_business_from_request(request)
+        # Get or create loyalty card for this business
+        loyalty_card, created = LoyaltyCard.objects.get_or_create(
+            user=request.user,
+            restaurant_settings=restaurant_settings
+        )
         
         # Serialize with tier information
         serializer = LoyaltyCardSerializer(loyalty_card, context={'request': request})
@@ -402,7 +459,11 @@ def regenerate_qr_code(request):
     """Regenerate QR code for user's loyalty card."""
     
     try:
-        loyalty_card = LoyaltyCard.objects.get(user=request.user)
+        restaurant_settings = get_business_from_request(request)
+        loyalty_card = LoyaltyCard.objects.get(
+            user=request.user,
+            restaurant_settings=restaurant_settings
+        )
         
         # Generate new QR code
         import uuid
@@ -512,8 +573,18 @@ class QRScanAPIView(View):
                     'error': 'Invalid loyalty QR code format.'
                 }, status=400)
             
-            # Scan the loyalty card
-            result = scan_loyalty_card(loyalty_code, visit_amount)
+            # Get business context from request
+            from core.utils import get_business_from_request
+            try:
+                restaurant_settings = get_business_from_request(request)
+            except ValueError:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Business identification required.'
+                }, status=400)
+            
+            # Scan the loyalty card (business-scoped)
+            result = scan_loyalty_card(loyalty_code, restaurant_settings, visit_amount)
             
             return JsonResponse(result)
             
