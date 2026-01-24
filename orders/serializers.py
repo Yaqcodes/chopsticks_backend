@@ -729,11 +729,11 @@ class GuestOrderSerializer(serializers.ModelSerializer):
         try:
             with transaction.atomic():
                 # Create the order - order number will be auto-generated in save()
-        order = Order.objects.create(**validated_data)
-        
+                order = Order.objects.create(**validated_data)
+                
                 # Create order items within the same transaction
-        for item_data in items_data:
-            menu_item = item_data['menu_item']
+                for item_data in items_data:
+                    menu_item = item_data['menu_item']
                     OrderItem.objects.create(
                         order=order,
                         menu_item=menu_item,
@@ -1075,7 +1075,7 @@ class OrderSerializer(serializers.ModelSerializer):
         try:
             with transaction.atomic():
                 # Create the order - order number will be auto-generated in save()
-        order = Order.objects.create(**validated_data)
+                order = Order.objects.create(**validated_data)
                 
                 # Create order items within the same transaction
                 for item_data in items_data:
