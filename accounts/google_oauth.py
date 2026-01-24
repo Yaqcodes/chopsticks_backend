@@ -3,6 +3,7 @@ Google OAuth utility functions for validating Google OAuth tokens.
 """
 
 import json
+import base64
 import requests
 from urllib.parse import urlencode
 from django.conf import settings
@@ -90,7 +91,7 @@ def get_google_oauth_url(restaurant_settings):
     
     Args:
         restaurant_settings: RestaurantSettings instance with OAuth credentials
-        
+    
     Returns:
         str: Google OAuth authorization URL
         
@@ -104,6 +105,15 @@ def get_google_oauth_url(restaurant_settings):
     redirect_uri = f"{settings.OAUTH_BASE_URL}/api/auth/google/callback/"
     scope = "openid email profile"
     
+    # Include business identifier in state parameter for callback identification
+    # This is necessary because Google redirects from accounts.google.com,
+    # so we can't identify the business from request headers
+    state_data = {
+        'business_id': restaurant_settings.id,
+        'domain': restaurant_settings.domain or ''
+    }
+    state = base64.urlsafe_b64encode(json.dumps(state_data).encode()).decode().rstrip('=')
+    
     # Build query parameters with proper URL encoding
     params = {
         'client_id': client_id,
@@ -111,7 +121,8 @@ def get_google_oauth_url(restaurant_settings):
         'response_type': 'code',
         'scope': scope,
         'access_type': 'offline',
-        'prompt': 'consent'
+        'prompt': 'consent',
+        'state': state  # Include state parameter with business identifier
     }
     
     return f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"

@@ -87,21 +87,21 @@ def initialize_payment(request):
                             'public_key': restaurant_settings.paystack_public_key
                         })
                 
-                # Create Payment record
-                payment = Payment.objects.create(
-                    reference=result['reference'],
-                    order=order,
-                    amount=order.total_amount,
-                    amount_kobo=order.get_paystack_amount(),
-                    access_code=result['access_code'],
-                    authorization_url=result['authorization_url'],
-                    customer_email=order.get_customer_email()
-                )
-                
+        # Create Payment record
+        payment = Payment.objects.create(
+            reference=result['reference'],
+            order=order,
+            amount=order.total_amount,
+            amount_kobo=order.get_paystack_amount(),
+            access_code=result['access_code'],
+            authorization_url=result['authorization_url'],
+            customer_email=order.get_customer_email()
+        )
+        
                 # Update order with Paystack reference atomically
-                order.paystack_reference = result['reference']
-                order.paystack_access_code = result['access_code']
-                order.save()
+        order.paystack_reference = result['reference']
+        order.paystack_access_code = result['access_code']
+        order.save()
         except Exception as e:
             logger.error(f"Error initializing payment in transaction: {str(e)}")
             raise
@@ -148,29 +148,29 @@ def verify_payment(request, reference):
                 payment = Payment.objects.select_for_update().get(id=payment.id)
                 order = payment.order
                 order = Order.objects.select_for_update().get(id=order.id)
-                
-                # Update payment status
-                payment.paystack_status = result.get('status', '')
-                payment.verified_at = timezone.now()
-                
-                if result.get('status') == 'success':
-                    payment.status = 'success'
-                    
+        
+        # Update payment status
+        payment.paystack_status = result.get('status', '')
+        payment.verified_at = timezone.now()
+        
+        if result.get('status') == 'success':
+            payment.status = 'success'
+            
                     # Update order status atomically
-                    order.payment_status = 'paid'
-                    order.payment_verified_at = timezone.now()
-                    order.save()
-                    
+            order.payment_status = 'paid'
+            order.payment_verified_at = timezone.now()
+            order.save()
+            
                     # Award loyalty points (within transaction)
-                    if order.user:
-                        award_points_for_order(order)
-                    
-                else:
-                    payment.status = 'failed'
+            if order.user:
+                award_points_for_order(order)
+            
+        else:
+            payment.status = 'failed'
                     order.payment_status = 'failed'
                     order.save()
-                
-                payment.save()
+        
+        payment.save()
         except Exception as e:
             logger.error(f"Error updating payment status in transaction: {str(e)}")
             raise
@@ -265,19 +265,19 @@ class PaystackWebhookView(View):
                             return HttpResponse('Already processed', status=200)
                         
                         # Update payment status
-                        payment.status = 'success'
-                        payment.paystack_status = 'success'
-                        payment.verified_at = timezone.now()
-                        payment.save()
-                        
+                payment.status = 'success'
+                payment.paystack_status = 'success'
+                payment.verified_at = timezone.now()
+                payment.save()
+                
                         # Update order status atomically
-                        order.payment_status = 'paid'
-                        order.payment_verified_at = timezone.now()
-                        order.save()
-                        
+                order.payment_status = 'paid'
+                order.payment_verified_at = timezone.now()
+                order.save()
+                
                         # Award loyalty points (within transaction)
-                        if order.user:
-                            award_points_for_order(order)
+                if order.user:
+                    award_points_for_order(order)
                         
                         logger.info("Webhook processed successfully for reference: %s", reference)
                 except Exception as e:

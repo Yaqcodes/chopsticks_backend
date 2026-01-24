@@ -27,6 +27,7 @@ from .serializers import (
 )
 from .google_oauth import validate_google_oauth_token
 from core.utils import get_business_from_request, get_frontend_url_from_business
+from core.models import RestaurantSettings
 
 
 class RegisterView(generics.CreateAPIView):
@@ -383,12 +384,52 @@ def google_oauth_url(request):
 def google_oauth_callback(request):
     """Handle Google OAuth callback and redirect to frontend."""
     try:
-        # Identify business for multi-tenant frontend URL (strict - no fallbacks)
-        restaurant_settings = get_business_from_request(request)
+        # Get the authorization code and state from the callback
+        code = request.GET.get('code')
+        state_param = request.GET.get('state')
+        
+        # Identify business from state parameter (preferred method)
+        # This is necessary because Google redirects from accounts.google.com,
+        # so request headers won't contain the frontend domain
+        restaurant_settings = None
+        if state_param:
+            try:
+                import base64
+                import json
+                # Decode state parameter (add padding if needed)
+                state_padded = state_param + '=' * (4 - len(state_param) % 4)
+                state_data = json.loads(base64.urlsafe_b64decode(state_padded).decode())
+                business_id = state_data.get('business_id')
+                if business_id:
+                    restaurant_settings = RestaurantSettings.objects.get(id=business_id)
+                    logger.debug(f"Identified business from state parameter: {restaurant_settings.domain}")
+            except Exception as e:
+                logger.warning(f"Failed to extract business from state parameter: {str(e)}")
+        
+        # Fallback: try to identify from request headers (for backward compatibility)
+        if not restaurant_settings:
+            try:
+                restaurant_settings = get_business_from_request(request)
+                logger.debug(f"Identified business from request headers: {restaurant_settings.domain}")
+            except ValueError as ve:
+                logger.warning(f"Business identification from request headers failed: {str(ve)}")
+        
+        # Last resort: if still no business found, this is an error
+        if not restaurant_settings:
+            logger.error("Could not identify business for OAuth callback")
+            # Try to get a default frontend URL for error redirect
+            try:
+                default_settings = RestaurantSettings.objects.first()
+                if default_settings:
+                    frontend_url = get_frontend_url_from_business(default_settings, request=request)
+                else:
+                    frontend_url = settings.OAUTH_BASE_URL
+            except:
+                frontend_url = settings.OAUTH_BASE_URL
+            return redirect(f"{frontend_url}/?oauth=error&message=Business identification failed")
+        
         frontend_url = get_frontend_url_from_business(restaurant_settings, request=request)
         
-        # Get the authorization code from the callback
-        code = request.GET.get('code')
         if not code:
             # Redirect to frontend with error
             return redirect(f"{frontend_url}/?oauth=error&message=No authorization code received")
@@ -493,15 +534,38 @@ def google_oauth_callback(request):
         
     except Exception as e:
         # Redirect to frontend with error
-        # Try to get frontend URL from request if not already set
+        # Try to get frontend URL from state parameter or request if not already set
         if 'frontend_url' not in locals():
-            try:
-                restaurant_settings = get_business_from_request(request)
+            restaurant_settings = None
+            state_param = request.GET.get('state')
+            
+            # Try to get business from state parameter
+            if state_param:
+                try:
+                    import base64
+                    import json
+                    state_padded = state_param + '=' * (4 - len(state_param) % 4)
+                    state_data = json.loads(base64.urlsafe_b64decode(state_padded).decode())
+                    business_id = state_data.get('business_id')
+                    if business_id:
+                        restaurant_settings = RestaurantSettings.objects.get(id=business_id)
+                except Exception:
+                    pass
+            
+            # Fallback to request-based identification
+            if not restaurant_settings:
+                try:
+                    restaurant_settings = get_business_from_request(request)
+                except ValueError:
+                    # Last resort: use first available business
+                    restaurant_settings = RestaurantSettings.objects.first()
+            
+            if restaurant_settings:
                 frontend_url = get_frontend_url_from_business(restaurant_settings, request=request)
-            except ValueError as ve:
-                # If business identification fails, log error and raise
-                logger.error(f"OAuth callback error - business identification failed: {str(ve)}")
-                raise ValueError(f"Cannot redirect: {str(ve)}")
+            else:
+                # Absolute last resort: use backend URL
+                frontend_url = settings.OAUTH_BASE_URL
+                logger.error("OAuth callback error - could not identify business for error redirect")
         
         error_message = str(e).replace(' ', '%20')
         return redirect(f"{frontend_url}/?oauth=error&message={error_message}")

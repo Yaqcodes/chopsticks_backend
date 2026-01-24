@@ -305,7 +305,7 @@ def scan_loyalty_card(qr_code, restaurant_settings, visit_amount=None):
         
         # Award points (business-scoped)
         points_awarded = award_points_for_physical_visit(
-            loyalty_card.user,
+            loyalty_card.user, 
             restaurant_settings,
             visit_amount
         )

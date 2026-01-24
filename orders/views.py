@@ -163,15 +163,15 @@ def create_order(request):
     
     order = None
     for attempt in range(max_retries):
-        try:
-            # Log the incoming request data for debugging
+    try:
+        # Log the incoming request data for debugging
             logger.info(f"Creating order for user {user_id} (attempt {attempt + 1}/{max_retries})")
-            
-            serializer = UnifiedOrderSerializer(data=request.data, context={'request': request})
-            serializer.is_valid(raise_exception=True)
-            
+        
+        serializer = UnifiedOrderSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        
             # Create the order using the serializer (already uses atomic transaction)
-            order = serializer.save()
+        order = serializer.save()
             
             # Success - break out of retry loop
             break
@@ -211,34 +211,34 @@ def create_order(request):
         return Response({
             'error': 'Order creation failed unexpectedly. Please try again.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    # Award points for the order (commented out as requested)
-    # if order.user:
-    #     award_points_for_order(order)
-    
-    # Use the serializer to return the response data
-    try:
-        response_serializer = OrderDetailSerializer(order)
-        response_data = response_serializer.data
-        logger.info(f"Order {order.order_number} created successfully for user {user_id}")
         
-        return Response({
-            'message': 'Order created successfully.',
-            'order': response_data
-        }, status=status.HTTP_201_CREATED)
+        # Award points for the order (commented out as requested)
+        # if order.user:
+        #     award_points_for_order(order)
         
-    except Exception as serialization_error:
-        logger.error(f"Error serializing order response: {serialization_error}")
-        # Return a simplified response if serialization fails
-        return Response({
-            'message': 'Order created successfully.',
-            'order': {
-                'id': order.id,
-                'order_number': order.order_number,
-                'status': order.status,
-                'total_amount': str(order.total_amount)
-            }
-        }, status=status.HTTP_201_CREATED)
+        # Use the serializer to return the response data
+        try:
+            response_serializer = OrderDetailSerializer(order)
+            response_data = response_serializer.data
+            logger.info(f"Order {order.order_number} created successfully for user {user_id}")
+            
+            return Response({
+                'message': 'Order created successfully.',
+                'order': response_data
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as serialization_error:
+            logger.error(f"Error serializing order response: {serialization_error}")
+            # Return a simplified response if serialization fails
+            return Response({
+                'message': 'Order created successfully.',
+                'order': {
+                    'id': order.id,
+                    'order_number': order.order_number,
+                    'status': order.status,
+                    'total_amount': str(order.total_amount)
+                }
+            }, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])

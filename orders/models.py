@@ -40,18 +40,18 @@ def generate_order_number(restaurant_settings, max_retries=5):
                     restaurant_settings=restaurant_settings
                 ).select_for_update().order_by('-order_number').first()
                 
-                if last_order:
-                    # Extract number from last order number
-                    try:
-                        last_num = int(last_order.order_number.split('-')[1])
-                        new_num = last_num + 1
-                    except (IndexError, ValueError):
+    if last_order:
+        # Extract number from last order number
+        try:
+            last_num = int(last_order.order_number.split('-')[1])
+            new_num = last_num + 1
+        except (IndexError, ValueError):
                         # If order number format is invalid, start from 1
-                        new_num = 1
-                else:
+            new_num = 1
+    else:
                     # No previous orders for this business
-                    new_num = 1
-                
+        new_num = 1
+    
                 order_number = f"ORD-{new_num:03d}"
                 
                 # Verify uniqueness (double-check with database constraint)

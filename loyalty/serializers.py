@@ -208,7 +208,7 @@ class LoyaltyCardSerializer(serializers.ModelSerializer):
         try:
             restaurant_settings = obj.restaurant_settings
             tier = get_user_loyalty_tier(obj.user, restaurant_settings)
-            return get_tier_benefits(tier)
+        return get_tier_benefits(tier)
         except:
             return get_tier_benefits('bronze')
     
