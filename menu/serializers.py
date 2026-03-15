@@ -12,6 +12,22 @@ def _media_url(path):
     return f"{base}/{path}" if path else None
 
 
+def _normalize_colors(colors):
+    """Return list of { name, hex } for frontend. Name defaults to hex when empty."""
+    if not colors or not isinstance(colors, list):
+        return []
+    out = []
+    for c in colors:
+        if not isinstance(c, dict):
+            continue
+        hex_val = (c.get('hex') or '#000000').strip()
+        if not hex_val.startswith('#'):
+            hex_val = '#' + hex_val
+        name = (c.get('name') or '').strip() or hex_val
+        out.append({'name': name, 'hex': hex_val})
+    return out
+
+
 class CategorySerializer(serializers.ModelSerializer):
     """Serializer for menu categories."""
     
@@ -39,15 +55,20 @@ class MenuItemSerializer(serializers.ModelSerializer):
     formatted_price = serializers.CharField(read_only=True)
     image = serializers.SerializerMethodField()
     size = serializers.SerializerMethodField()
-    
+    colors = serializers.SerializerMethodField()
+
     class Meta:
         model = MenuItem
         fields = [
             'id', 'name', 'description', 'size', 'sizes', 'sku', 'price', 'formatted_price',
             'category', 'category_name', 'category_id', 'image',
             'badges', 'badges_display', 'allergens', 'nutritional_info',
-            'is_available', 'is_featured', 'preparation_time', 'sort_order'
+            'is_available', 'is_featured', 'preparation_time', 'sort_order',
+            'gender', 'colors',
         ]
+
+    def get_colors(self, obj):
+        return _normalize_colors(getattr(obj, 'colors', None))
     
     def get_image(self, obj):
         return _media_url(obj.image) if obj.image else None
@@ -94,15 +115,19 @@ class FeaturedItemsSerializer(serializers.ModelSerializer):
     badges_display = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
     size = serializers.SerializerMethodField()
-    
+    colors = serializers.SerializerMethodField()
+
     class Meta:
         model = MenuItem
         fields = [
             'id', 'name', 'description', 'size', 'sizes', 'sku', 'price', 'formatted_price',
             'category_name', 'image', 'badges', 'badges_display',
-            'is_available', 'preparation_time'
+            'is_available', 'preparation_time', 'gender', 'colors',
         ]
-    
+
+    def get_colors(self, obj):
+        return _normalize_colors(getattr(obj, 'colors', None))
+
     def get_image(self, obj):
         return _media_url(obj.image) if obj.image else None
     
@@ -126,15 +151,19 @@ class MenuSearchSerializer(serializers.ModelSerializer):
     badges_display = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
     size = serializers.SerializerMethodField()
-    
+    colors = serializers.SerializerMethodField()
+
     class Meta:
         model = MenuItem
         fields = [
             'id', 'name', 'description', 'size', 'sizes', 'sku', 'price', 'formatted_price',
             'category_name', 'image', 'badges', 'badges_display',
-            'is_available', 'is_featured'
+            'is_available', 'is_featured', 'gender', 'colors',
         ]
-    
+
+    def get_colors(self, obj):
+        return _normalize_colors(getattr(obj, 'colors', None))
+
     def get_image(self, obj):
         return _media_url(obj.image) if obj.image else None
     
