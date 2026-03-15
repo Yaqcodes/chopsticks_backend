@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin, TabularInline
 from .models import Order, OrderItem
-from core.admin_sites import roschi_admin_site, chopsticks_admin_site
+from core.admin_sites import roschi_admin_site, chopsticks_admin_site, zmall_admin_site
 from core.main_admin_site import main_admin_site
 
 
@@ -374,5 +374,7 @@ roschi_admin_site.register(Order, RoschiOrderAdmin)
 roschi_admin_site.register(OrderItem, RoschiOrderItemAdmin)
 chopsticks_admin_site.register(Order, RoschiOrderAdmin)
 chopsticks_admin_site.register(OrderItem, RoschiOrderItemAdmin)
+zmall_admin_site.register(Order, RoschiOrderAdmin)
+zmall_admin_site.register(OrderItem, RoschiOrderItemAdmin)
 main_admin_site.register(Order, OrderAdmin)
 main_admin_site.register(OrderItem, OrderItemAdmin)

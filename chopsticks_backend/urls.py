@@ -21,7 +21,7 @@ from django.conf.urls.static import static
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
-from core.admin_sites import roschi_admin_site, chopsticks_admin_site
+from core.admin_sites import roschi_admin_site, chopsticks_admin_site, zmall_admin_site
 from core.main_admin_site import main_admin_site
 
 # Swagger/OpenAPI Schema
@@ -38,7 +38,11 @@ schema_view = get_schema_view(
     permission_classes=(permissions.AllowAny,),
 )
 
+# Serve /media/ first so image requests are never caught by other patterns
 urlpatterns = [
+    *static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT),
+]
+urlpatterns += [
     # Root redirect to user guide
     path('', include('core.urls')),
     
@@ -48,6 +52,7 @@ urlpatterns = [
     # Business-specific admin interfaces
     path('roschi-admin/', roschi_admin_site.urls),
     path('cb-admin/', chopsticks_admin_site.urls),
+    path('zmall-admin/', zmall_admin_site.urls),
     
     # Loyalty admin routes
     path('admin-qr/', include('loyalty.admin_urls')),
@@ -70,15 +75,6 @@ urlpatterns = [
     path('api/promotions/', include('promotions.urls')),
     path('api/addresses/', include('addresses.urls')),
 ]
-
-# Serve static and media files during development
-if settings.DEBUG:
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-
-# Serve static files in production (needed for PythonAnywhere)
-if not settings.DEBUG:
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 # Main admin site is already configured in core/main_admin_site.py

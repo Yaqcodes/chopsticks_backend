@@ -67,6 +67,8 @@ class MainAdminSite(UnfoldAdminSite):
                                 return redirect('/roschi-admin/')
                             elif 'chopsticks' in domain or 'chopsticks' in name:
                                 return redirect('/cb-admin/')
+                            elif 'zmall' in domain or 'zmall' in name:
+                                return redirect('/zmall-admin/')
                 
                 return redirect('/')
         

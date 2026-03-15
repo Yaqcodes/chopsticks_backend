@@ -3,7 +3,7 @@ from django.shortcuts import render
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin
 from .models import RestaurantSettings, Quote
-from .admin_sites import roschi_admin_site, chopsticks_admin_site
+from .admin_sites import roschi_admin_site, chopsticks_admin_site, zmall_admin_site
 from .main_admin_site import main_admin_site
 
 
@@ -719,4 +719,7 @@ roschi_admin_site.register(RestaurantSettings, RoschiBusinessSettingsAdmin)
 roschi_admin_site.register(Quote, QuoteAdmin)
 
 chopsticks_admin_site.register(RestaurantSettings, ChopsticksBusinessSettingsAdmin)
+zmall_admin_site.register(RestaurantSettings, RoschiBusinessSettingsAdmin)
+zmall_admin_site.register(Quote, QuoteAdmin)
+
 main_admin_site.register(RestaurantSettings, RestaurantSettingsAdmin)

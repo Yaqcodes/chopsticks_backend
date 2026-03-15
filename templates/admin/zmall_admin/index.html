@@ -1,0 +1,209 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div class="zmall-dashboard">
+    <header class="zmall-dashboard-header">
+        <h1>{% trans 'ZMall Admin' %}</h1>
+        <p>{% trans 'Manage your catalog, orders, payments, and store settings' %}</p>
+    </header>
+
+    <section class="zmall-quick-strip" aria-label="Quick actions">
+        <p class="zmall-quick-strip-text">
+            <strong>Catalog & orders:</strong> {% trans 'Products and categories, orders and payments.' %}
+        </p>
+    </section>
+
+    <div class="zmall-grid">
+        {% if app_list %}
+            {% for app in app_list %}
+                <article class="zmall-card">
+                    <div class="zmall-card-header">
+                        <h2>
+                            <a href="{{ app.app_url }}" title="{% blocktrans with name=app.name %}Models in the {{ name }} application{% endblocktrans %}">
+                                {{ app.name }}
+                            </a>
+                        </h2>
+                    </div>
+                    <ul class="zmall-card-models">
+                        {% for model in app.models %}
+                            <li class="zmall-model">
+                                {% if model.admin_url %}
+                                    <div class="zmall-model-row">
+                                        <a href="{{ model.admin_url }}" class="zmall-model-link">
+                                            <span class="zmall-model-name">{{ model.name }}</span>
+                                        </a>
+                                        {% if model.add_url %}
+                                            <a href="{{ model.add_url }}" class="zmall-model-add" title="{% trans 'Add' %}" aria-label="{% trans 'Add' %} {{ model.name }}">
+                                                <span aria-hidden="true">+</span>
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="zmall-model-name">{{ model.name }}</span>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </article>
+            {% endfor %}
+        {% else %}
+            <p>{% trans "You don't have permission to view or edit anything." %}</p>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+/* ZMall: white primary, black secondary – clothing & apparel */
+.zmall-dashboard {
+    padding: clamp(1rem, 3vw, 2rem);
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.zmall-dashboard-header {
+    margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
+    padding-bottom: 1.25rem;
+    border-bottom: 2px solid #e5e5e5;
+}
+
+.zmall-dashboard-header h1 {
+    color: #0a0a0a;
+    font-size: clamp(1.5rem, 4vw, 1.75rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin: 0 0 0.5rem 0;
+}
+
+.zmall-dashboard-header p {
+    color: #525252;
+    font-size: clamp(0.875rem, 2vw, 1rem);
+    margin: 0;
+}
+
+.zmall-quick-strip {
+    margin-bottom: clamp(1.25rem, 3vw, 1.75rem);
+    padding: 0.75rem 1rem;
+    background: #fafafa;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+}
+
+.zmall-quick-strip-text {
+    margin: 0;
+    color: #737373;
+    font-size: 0.8125rem;
+}
+
+.zmall-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    gap: clamp(1rem, 2.5vw, 1.25rem);
+}
+
+.zmall-card {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 6px;
+    overflow: hidden;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.zmall-card:hover {
+    border-color: #a3a3a3;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.zmall-card-header {
+    background: #0a0a0a;
+    padding: clamp(0.75rem, 2vw, 1rem) clamp(1rem, 2.5vw, 1.25rem);
+}
+
+.zmall-card-header h2 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.zmall-card-header a {
+    color: #fff;
+    text-decoration: none;
+    letter-spacing: 0.01em;
+}
+
+.zmall-card-header a:hover {
+    color: #e5e5e5;
+}
+
+.zmall-card-models {
+    list-style: none;
+    margin: 0;
+    padding: clamp(0.75rem, 2vw, 1rem);
+}
+
+.zmall-model {
+    padding: 0.625rem 0;
+    border-bottom: 1px solid #f5f5f5;
+}
+
+.zmall-model:last-child {
+    border-bottom: none;
+}
+
+.zmall-model-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.zmall-model-link {
+    text-decoration: none;
+    color: #171717;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    flex: 1;
+    min-width: 0;
+}
+
+.zmall-model-link:hover {
+    color: #0a0a0a;
+    text-decoration: underline;
+}
+
+.zmall-model-name {
+    font-size: 0.9375rem;
+    font-weight: 500;
+}
+
+.zmall-model-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: #0a0a0a;
+    color: #fff;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 1.125rem;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: background 0.2s ease;
+}
+
+.zmall-model-add:hover {
+    background: #404040;
+    color: #fff;
+}
+
+@media (max-width: 640px) {
+    .zmall-dashboard {
+        padding: 1rem;
+    }
+    .zmall-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}

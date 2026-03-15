@@ -34,7 +34,7 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-here'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,chopsticks-frontend.vercel.app,chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app,chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app,chopsticksandbowls.com,www.chopsticksandbowls.com,chopsticksandb0wls.pythonanywhere.com,stringtheorylabs.pythonanywhere.com,roschiwater.com,www.roschiwater.com', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,chopsticks-frontend.vercel.app,chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app,chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app,chopsticksandbowls.com,www.chopsticksandbowls.com,chopsticksandb0wls.pythonanywhere.com,stringtheorylabs.pythonanywhere.com,roschiwater.com,www.roschiwater.com,zmall.ng,www.zmall.ng', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # Application definition
 INSTALLED_APPS = [
@@ -69,6 +69,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -140,23 +141,27 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 
-# STATIC_ROOT is where collectstatic will put files for production
+# STATIC_ROOT is where collectstatic will put files; WhiteNoise serves these when DEBUG=False
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# WhiteNoise: serve static files without needing DEBUG or a separate web server (admin, unfold, etc.)
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # STATICFILES_DIRS is where Django looks for static files during development
 STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
 
-# Media files
+# Media files (uploaded content: product images, etc.)
+# Use absolute path so serving works regardless of runserver cwd
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_ROOT = str((BASE_DIR / 'media').resolve())
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173,http://127.0.0.1:5173,https://chopsticks-frontend.vercel.app,https://chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app,https://chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app,https://chopsticksandbowls.com,https://www.chopsticksandbowls.com,https://roschiwater.com,https://www.roschiwater.com', cast=lambda v: [s.strip() for s in v.split(',')])
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173,http://127.0.0.1:5173,https://chopsticks-frontend.vercel.app,https://chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app,https://chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app,https://chopsticksandbowls.com,https://www.chopsticksandbowls.com,https://roschiwater.com,https://www.roschiwater.com,https://zmall.ng,https://www.zmall.ng', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # Additional CORS settings for production
 CORS_ALLOW_CREDENTIALS = True
@@ -363,6 +368,28 @@ CHOPSTICKS_UNFOLD = {
             "800": "107 33 168",
             "900": "88 28 135",
             "950": "59 7 100",
+        },
+    },
+}
+
+# ZMall Unfold settings (clothing & apparel – white primary, black secondary)
+ZMALL_UNFOLD = {
+    "SITE_TITLE": "ZMall Admin",
+    "SITE_HEADER": "ZMall",
+    "SITE_URL": "/zmall-admin/",
+    "COLORS": {
+        "primary": {
+            "50": "250 250 250",
+            "100": "245 245 245",
+            "200": "229 229 229",
+            "300": "212 212 212",
+            "400": "163 163 163",
+            "500": "115 115 115",
+            "600": "82 82 82",
+            "700": "64 64 64",
+            "800": "38 38 38",
+            "900": "23 23 23",
+            "950": "10 10 10",
         },
     },
 }

@@ -1,8 +1,11 @@
+from django import forms
 from django.contrib import admin
+from django.db.models import Max
 from django.utils.html import format_html
+from django.utils.text import slugify
 from unfold.admin import ModelAdmin
-from .models import Category, MenuItem
-from core.admin_sites import roschi_admin_site, chopsticks_admin_site
+from .models import Category, MenuItem, MenuItemImage
+from core.admin_sites import roschi_admin_site, chopsticks_admin_site, zmall_admin_site
 from core.main_admin_site import main_admin_site
 
 
@@ -50,15 +53,20 @@ class BusinessAdminMixin:
 class CategoryAdmin(admin.ModelAdmin):
     """Admin interface for Category model."""
     
-    list_display = ['name', 'restaurant_settings', 'is_active', 'sort_order', 'menu_items_count', 'created_at']
-    list_filter = ['restaurant_settings', 'is_active', 'created_at']
-    search_fields = ['name', 'description']
+    list_display = ['name', 'slug', 'is_active', 'sort_order', 'menu_items_count', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['name', 'slug', 'description']
     ordering = ['sort_order', 'name']
     list_editable = ['is_active', 'sort_order']
+    prepopulated_fields = {'slug': ('name',)}
+    
+    fieldsets = (
+        (None, {'fields': ('name', 'slug', 'description', 'image', 'is_active', 'sort_order', 'restaurant_settings')}),
+    )
     
     def menu_items_count(self, obj):
         """Display count of menu items in category."""
-        return obj.menu_items.filter(restaurant_settings=obj.restaurant_settings).count()
+        return obj.menu_items.count()
     menu_items_count.short_description = 'Menu Items'
     
     def get_queryset(self, request):
@@ -66,10 +74,22 @@ class CategoryAdmin(admin.ModelAdmin):
         return super().get_queryset(request).select_related('restaurant_settings')
 
 
+class MenuItemForm(forms.ModelForm):
+    """Form for MenuItem; image required on add, optional on edit."""
+    class Meta:
+        model = MenuItem
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.fields['image'].required = False
+
+
 @admin.register(MenuItem)
 class MenuItemAdmin(admin.ModelAdmin):
     """Admin interface for MenuItem model."""
-    
+    form = MenuItemForm
     list_display = ['name', 'category', 'size', 'sku', 'restaurant_settings', 'price', 'is_available', 'is_featured', 'sort_order']
     list_filter = ['restaurant_settings', 'category', 'is_available', 'is_featured', 'badges', 'created_at']
     search_fields = ['name', 'description', 'size', 'category__name']
@@ -87,6 +107,11 @@ class MenuItemAdmin(admin.ModelAdmin):
         ('Additional Information', {
             'fields': ('badges', 'allergens', 'nutritional_info'),
             'classes': ('collapse',)
+        }),
+        ('Apparel (optional)', {
+            'fields': ('gender', 'sizes', 'colors', 'images'),
+            'classes': ('collapse',),
+            'description': 'Used by ZMall; leave blank for food/beverage.',
         }),
     )
     
@@ -138,7 +163,7 @@ class RoschiCategoryAdmin(BusinessAdminMixin, ModelAdmin):
 
 class RoschiMenuItemAdmin(BusinessAdminMixin, ModelAdmin):
     """Products - Manage your water products that customers can order."""
-    
+    form = MenuItemForm
     list_display = ['name', 'category', 'size', 'sku', 'price_display', 'is_available', 'stock_status']
     list_filter = ['category', 'is_available', 'created_at']
     search_fields = ['name', 'description', 'size', 'category__name']
@@ -195,6 +220,13 @@ class RoschiMenuItemAdmin(BusinessAdminMixin, ModelAdmin):
         
         return form
     
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'category':
+            business_settings = self._get_business_settings()
+            if business_settings:
+                kwargs['queryset'] = Category.objects.filter(restaurant_settings=business_settings)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+    
     def get_queryset(self, request):
         """Show only products for this business."""
         qs = super().get_queryset(request).select_related('category', 'restaurant_settings')
@@ -233,10 +265,253 @@ class RoschiMenuItemAdmin(BusinessAdminMixin, ModelAdmin):
         super().save_model(request, obj, form, change)
 
 
+# ---- Inline for multiple product images ----
+class MenuItemImageInline(admin.StackedInline):
+    model = MenuItemImage
+    extra = 3
+    max_num = 20
+    fields = ['image', 'sort_order']
+    verbose_name = 'Additional image'
+    verbose_name_plural = 'Additional images (upload multiple here)'
+    ordering = ['sort_order', 'id']
+    classes = []
+
+
+# ---- ZMall forms and admin ----
+import json
+from .widgets import (
+    ColorPickerWidget,
+    CLOTHING_SIZE_CHOICES,
+    SHOE_SIZE_CHOICES,
+    ClothingSizeWidget,
+    ShoeSizeWidget,
+)
+
+
+class ZmallMenuItemForm(forms.ModelForm):
+    """Form for ZMall products: badges, sizes (by category), colors (picker), multiple images."""
+    
+    badge_choices = forms.MultipleChoiceField(
+        label='Badges',
+        choices=MenuItem.BADGE_CHOICES_ZMALL,
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        help_text='Select badges shown on the product (ZMall only: Bestseller, Sale).',
+    )
+    size_clothing = forms.MultipleChoiceField(
+        label='Sizes (clothing)',
+        choices=CLOTHING_SIZE_CHOICES,
+        required=False,
+        widget=ClothingSizeWidget(),
+        help_text='XS–XXL, ONE SIZE. Shown when category is not Shoes.',
+    )
+    size_shoes = forms.MultipleChoiceField(
+        label='Sizes (shoes)',
+        choices=SHOE_SIZE_CHOICES,
+        required=False,
+        widget=ShoeSizeWidget(),
+        help_text='Shown only when category is Shoes.',
+    )
+    class Meta:
+        model = MenuItem
+        fields = [
+            'name', 'description', 'category', 'price', 'image',
+            'gender', 'size_clothing', 'size_shoes', 'colors', 'sku', 'is_available', 'is_featured',
+            'badge_choices',
+        ]
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['badge_choices'].choices = MenuItem.BADGE_CHOICES_ZMALL
+        self.fields['size_clothing'].choices = CLOTHING_SIZE_CHOICES
+        self.fields['size_shoes'].choices = SHOE_SIZE_CHOICES
+        self.fields['colors'].widget = ColorPickerWidget()
+        self.fields['colors'].help_text = 'Add colours with optional names. Pick any shade; if name is empty, hex is shown on the store.'
+        if self.instance and self.instance.pk:
+            self.fields['image'].required = False
+            if self.instance.badges:
+                allowed = {c[0] for c in MenuItem.BADGE_CHOICES_ZMALL}
+                self.fields['badge_choices'].initial = [b for b in self.instance.badges if b in allowed]
+            if self.instance.sizes:
+                shoe_vals = {c[0] for c in SHOE_SIZE_CHOICES}
+                clothing_vals = {c[0] for c in CLOTHING_SIZE_CHOICES}
+                self.fields['size_clothing'].initial = [s for s in self.instance.sizes if s in clothing_vals]
+                self.fields['size_shoes'].initial = [s for s in self.instance.sizes if s in shoe_vals]
+    
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        obj.badges = self.cleaned_data.get('badge_choices', [])
+        category = self.cleaned_data.get('category')
+        is_shoes = category and getattr(category, 'slug', None) == 'shoes'
+        obj.sizes = self.cleaned_data.get('size_shoes', []) if is_shoes else self.cleaned_data.get('size_clothing', [])
+        if commit:
+            obj.save()
+        return obj
+
+
+class ZmallCategoryAdmin(BusinessAdminMixin, ModelAdmin):
+    """Categories for ZMall: keep slug safe for non-technical users."""
+    
+    list_display = ['name', 'is_active', 'product_count', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['name', 'slug', 'description']
+    ordering = ['name']
+    list_editable = ['is_active']
+    
+    fieldsets = (
+        (None, {'fields': ('name', 'description', 'image', 'is_active', 'sort_order')}),
+        ('Advanced (do not change)', {
+            'fields': ('slug',),
+            'classes': ('collapse',),
+            'description': 'This is used to build stable website URLs.',
+        }),
+    )
+    readonly_fields = ('slug',)
+
+    def save_model(self, request, obj, form, change):
+        if not obj.restaurant_settings_id:
+            obj.restaurant_settings = self._get_business_settings()
+        if not obj.slug:
+            base = slugify(obj.name)[:100] or f'category-{obj.pk or ""}'.strip('-')
+            candidate = base
+            n = 0
+            rs = obj.restaurant_settings
+            while Category.objects.filter(restaurant_settings=rs, slug=candidate).exclude(pk=obj.pk).exists():
+                n += 1
+                suffix = f'-{n}'
+                candidate = f'{base[: (100 - len(suffix))]}{suffix}'
+            obj.slug = candidate
+        super().save_model(request, obj, form, change)
+    
+    def product_count(self, obj):
+        business_settings = self._get_business_settings()
+        if business_settings:
+            return obj.menu_items.filter(restaurant_settings=business_settings).count()
+        return 0
+    product_count.short_description = 'Products'
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        business_settings = self._get_business_settings()
+        if not business_settings:
+            return qs.none()
+        return qs.filter(restaurant_settings=business_settings)
+    
+    def _get_business_settings(self):
+        if hasattr(self.admin_site, 'get_business_settings'):
+            return self.admin_site.get_business_settings()
+        return None
+
+
+class ZmallMenuItemAdmin(BusinessAdminMixin, ModelAdmin):
+    """Products for ZMall: apparel fields; colour picker; size checkboxes; multiple images."""
+    
+    form = ZmallMenuItemForm
+    inlines = [MenuItemImageInline]
+    change_form_template = 'admin/menu/menuitem/zmall_menuitem_change_form.html'
+
+    class Media:
+        js = ('menu/js/zmall_sizes.js',)
+    list_display = ['name', 'category', 'gender', 'price_display', 'is_available', 'badges_display', 'sku']
+    list_filter = ['category', 'gender', 'is_available', 'is_featured']
+    search_fields = ['name', 'description', 'category__name']
+    ordering = ['category', '-created_at', 'name']
+    list_editable = ['is_available', 'sku']
+    
+    fieldsets = (
+        ('Product', {
+            'fields': ('name', 'description', 'category', 'price', 'image'),
+            'description': 'Product details.',
+        }),
+        ('Apparel', {
+            'fields': ('gender', 'size_clothing', 'size_shoes', 'colors'),
+            'description': 'Gender, sizes (checkboxes), and colours (picker; name optional, hex used when empty).',
+        }),
+        ('Status', {
+            'fields': ('is_available', 'is_featured', 'sku'),
+        }),
+        ('Badges (ZMall only)', {
+            'fields': ('badge_choices',),
+            'description': 'Bestseller and Sale only.',
+        }),
+    )
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request).select_related('category', 'restaurant_settings')
+        business_settings = self._get_business_settings()
+        if business_settings:
+            return qs.filter(restaurant_settings=business_settings)
+        return qs.none()
+    
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'category':
+            business_settings = self._get_business_settings()
+            if business_settings:
+                kwargs['queryset'] = Category.objects.filter(restaurant_settings=business_settings)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def _zmall_extra_context(self, request):
+        ctx = {}
+        business_settings = self._get_business_settings()
+        if business_settings:
+            cat_qs = Category.objects.filter(restaurant_settings=business_settings)
+            ctx['zmall_category_slugs_json'] = json.dumps({str(c.pk): (c.slug or '') for c in cat_qs})
+        else:
+            ctx['zmall_category_slugs_json'] = '{}'
+        return ctx
+
+    def add_view(self, request, form_url='', extra_context=None):
+        extra = extra_context or {}
+        extra.update(self._zmall_extra_context(request))
+        return super().add_view(request, form_url, extra)
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        extra = extra_context or {}
+        extra.update(self._zmall_extra_context(request))
+        return super().change_view(request, object_id, form_url, extra)
+
+    def _get_business_settings(self):
+        if hasattr(self.admin_site, 'get_business_settings'):
+            return self.admin_site.get_business_settings()
+        return None
+    
+    def price_display(self, obj):
+        return f"₦{obj.price:,.2f}"
+    price_display.short_description = 'Price'
+    
+    def badges_display(self, obj):
+        if not obj.badges:
+            return ''
+        allowed = {c[0] for c in MenuItem.BADGE_CHOICES_ZMALL}
+        display = dict(MenuItem.BADGE_CHOICES_ZMALL)
+        return ', '.join(display.get(b, b) for b in obj.badges if b in allowed)
+    badges_display.short_description = 'Badges'
+    
+    def save_model(self, request, obj, form, change):
+        if not obj.restaurant_settings_id:
+            business_settings = self._get_business_settings()
+            if business_settings:
+                obj.restaurant_settings = business_settings
+        if not change and obj.category_id:
+            agg = MenuItem.objects.filter(category_id=obj.category_id).aggregate(m=Max('sort_order'))
+            obj.sort_order = (agg['m'] or 0) + 1
+        super().save_model(request, obj, form, change)
+        files = request.FILES.getlist('zmall_additional_images')
+        if files and obj.pk:
+            agg = obj.extra_images.aggregate(m=Max('sort_order'))
+            next_order = (agg['m'] or 0) + 1
+            for f in files:
+                if f:
+                    MenuItemImage.objects.create(menu_item=obj, image=f, sort_order=next_order)
+                    next_order += 1
+
+
 # Register with business admin sites
 roschi_admin_site.register(Category, RoschiCategoryAdmin)
 roschi_admin_site.register(MenuItem, RoschiMenuItemAdmin)
 chopsticks_admin_site.register(Category, RoschiCategoryAdmin)
 chopsticks_admin_site.register(MenuItem, RoschiMenuItemAdmin)
+zmall_admin_site.register(Category, ZmallCategoryAdmin)
+zmall_admin_site.register(MenuItem, ZmallMenuItemAdmin)
 main_admin_site.register(Category, CategoryAdmin)
 main_admin_site.register(MenuItem, MenuItemAdmin)

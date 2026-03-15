@@ -3,10 +3,22 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Q
+from django.db import connection
+from django.db.models import Q, Case, When
 
 from core.utils import get_business_from_request
 from .models import Category, MenuItem
+
+
+def filter_queryset_by_badge(queryset, badge):
+    """Filter by badge in a way that works on SQLite and PostgreSQL (and other DBs)."""
+    if not badge:
+        return queryset
+    # PostgreSQL (and MySQL) support JSONField __contains with list; SQLite does not.
+    if connection.vendor == 'sqlite':
+        # Match JSON array element e.g. ["bestseller"] or ["sale","bestseller"]
+        return queryset.filter(badges__icontains=f'"{badge}"')
+    return queryset.filter(badges__contains=[badge])
 from .serializers import (
     CategorySerializer, MenuItemSerializer, MenuItemDetailSerializer,
     FeaturedItemsSerializer, MenuSearchSerializer
@@ -72,8 +84,7 @@ class MenuItemListView(generics.ListAPIView):
         
         # Filter by badge if provided
         badge = self.request.query_params.get('badge')
-        if badge:
-            queryset = queryset.filter(badges__contains=[badge])
+        queryset = filter_queryset_by_badge(queryset, badge)
         
         # Filter by price range if provided
         min_price = self.request.query_params.get('min_price')
@@ -84,7 +95,23 @@ class MenuItemListView(generics.ListAPIView):
         if max_price:
             queryset = queryset.filter(price__lte=max_price)
         
+        # Filter by explicit id list (e.g. SubCategories section). Preserve order.
+        ids_param = self.request.query_params.get('ids')
+        if ids_param:
+            try:
+                id_list = [int(x.strip()) for x in ids_param.split(',') if x.strip()]
+                if id_list:
+                    # Preserve order: filter by ids then order by position in id_list
+                    ordering = self._order_by_ids(id_list)
+                    queryset = queryset.filter(id__in=id_list).order_by(ordering)
+            except (ValueError, TypeError):
+                pass
+        
         return queryset
+    
+    def _order_by_ids(self, id_list):
+        """Return Case/When ordering so results match id_list order."""
+        return Case(*[When(id=x, then=pos) for pos, x in enumerate(id_list)])
 
 
 class MenuItemDetailView(generics.RetrieveAPIView):
@@ -143,9 +170,7 @@ def menu_search(request):
     if category_id:
         queryset = queryset.filter(category_id=category_id)
     
-    badge = request.query_params.get('badge')
-    if badge:
-        queryset = queryset.filter(badges__contains=[badge])
+    queryset = filter_queryset_by_badge(queryset, request.query_params.get('badge'))
     
     # Serialize results
     serializer = MenuSearchSerializer(queryset, many=True)

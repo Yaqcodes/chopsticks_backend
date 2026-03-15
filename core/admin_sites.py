@@ -230,9 +230,24 @@ class ChopsticksAdminSite(BusinessAdminSite):
         )
 
 
+class ZmallAdminSite(BusinessAdminSite):
+    """Custom admin site for ZMall (clothing & apparel) management."""
+    
+    def __init__(self, name='zmall_admin', **kwargs):
+        super().__init__(
+            name=name,
+            business_identifier='zmall',
+            site_title="ZMall Admin",
+            site_header="ZMall",
+            index_title="Dashboard",
+            **kwargs
+        )
+
+
 # Create admin site instances
 roschi_admin_site = RoschiWaterAdminSite(name='roschi_admin')
 chopsticks_admin_site = ChopsticksAdminSite(name='chopsticks_admin')
+zmall_admin_site = ZmallAdminSite(name='zmall_admin')
 
 # Ensure branding is set correctly
 roschi_admin_site.site_title = "Roschi Water Admin"
@@ -242,3 +257,7 @@ roschi_admin_site.index_title = "Dashboard"
 chopsticks_admin_site.site_title = "Chopsticks & Bowls Admin"
 chopsticks_admin_site.site_header = "Chopsticks & Bowls"
 chopsticks_admin_site.index_title = "Dashboard"
+
+zmall_admin_site.site_title = "ZMall Admin"
+zmall_admin_site.site_header = "ZMall"
+zmall_admin_site.index_title = "Dashboard"

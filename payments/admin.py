@@ -3,7 +3,7 @@ from django.utils.html import format_html
 from django.utils import timezone
 from unfold.admin import ModelAdmin
 from .models import Payment
-from core.admin_sites import roschi_admin_site, chopsticks_admin_site
+from core.admin_sites import roschi_admin_site, chopsticks_admin_site, zmall_admin_site
 from core.main_admin_site import main_admin_site
 
 
@@ -253,4 +253,5 @@ class RoschiPaymentAdmin(BusinessAdminMixin, ModelAdmin):
 # Register with business admin sites
 roschi_admin_site.register(Payment, RoschiPaymentAdmin)
 chopsticks_admin_site.register(Payment, RoschiPaymentAdmin)
+zmall_admin_site.register(Payment, RoschiPaymentAdmin)
 main_admin_site.register(Payment, PaymentAdmin)
