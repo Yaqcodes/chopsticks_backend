@@ -77,10 +77,18 @@ class MenuItemListView(generics.ListAPIView):
             restaurant_settings=restaurant_settings,
         )
         
-        # Filter by category if provided
+        # Filter by category if provided (by id or slug)
         category_id = self.request.query_params.get('category_id')
+        category_slug = self.request.query_params.get('category_slug')
         if category_id:
             queryset = queryset.filter(category_id=category_id)
+        elif category_slug:
+            category = Category.objects.filter(
+                restaurant_settings=restaurant_settings,
+                slug=category_slug.strip()
+            ).first()
+            if category:
+                queryset = queryset.filter(category=category)
         
         # Filter by badge if provided
         badge = self.request.query_params.get('badge')
@@ -167,9 +175,17 @@ def menu_search(request):
     
     # Apply additional filters if provided
     category_id = request.query_params.get('category_id')
+    category_slug = request.query_params.get('category_slug')
     if category_id:
         queryset = queryset.filter(category_id=category_id)
-    
+    elif category_slug:
+        category = Category.objects.filter(
+            restaurant_settings=restaurant_settings,
+            slug=category_slug.strip()
+        ).first()
+        if category:
+            queryset = queryset.filter(category=category)
+
     queryset = filter_queryset_by_badge(queryset, request.query_params.get('badge'))
     
     # Serialize results
