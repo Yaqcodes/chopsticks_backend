@@ -714,12 +714,31 @@ class QuoteAdmin(ModelAdmin):
     export_quotes.short_description = "📥 Export Selected Quotes to CSV"
 
 
+# ZMall admin: only ZMall-relevant filters (single tenant; no restaurant_settings in sidebar)
+class ZmallBusinessSettingsAdmin(RoschiBusinessSettingsAdmin):
+    """Business settings in ZMall admin: minimal filters (one business)."""
+    list_filter = ['is_open', 'updated_at']
+
+
+class ZmallQuoteAdmin(QuoteAdmin):
+    """Quotes in ZMall admin: status and date only; queryset scoped to ZMall business."""
+    list_filter = ['status', 'created_at']
+
+    def get_queryset(self, request):
+        qs = super(QuoteAdmin, self).get_queryset(request)
+        if hasattr(self.admin_site, 'get_business_settings'):
+            business_settings = self.admin_site.get_business_settings()
+            if business_settings:
+                return qs.filter(restaurant_settings=business_settings)
+        return qs
+
+
 # Register with business admin sites
 roschi_admin_site.register(RestaurantSettings, RoschiBusinessSettingsAdmin)
 roschi_admin_site.register(Quote, QuoteAdmin)
 
 chopsticks_admin_site.register(RestaurantSettings, ChopsticksBusinessSettingsAdmin)
-zmall_admin_site.register(RestaurantSettings, RoschiBusinessSettingsAdmin)
-zmall_admin_site.register(Quote, QuoteAdmin)
+zmall_admin_site.register(RestaurantSettings, ZmallBusinessSettingsAdmin)
+zmall_admin_site.register(Quote, ZmallQuoteAdmin)
 
 main_admin_site.register(RestaurantSettings, RestaurantSettingsAdmin)

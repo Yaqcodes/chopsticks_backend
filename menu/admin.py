@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib import admin
+from django.db import connection
 from django.db.models import Max
 from django.utils.html import format_html
 from django.utils.text import slugify
@@ -7,6 +8,50 @@ from unfold.admin import ModelAdmin
 from .models import Category, MenuItem, MenuItemImage
 from core.admin_sites import roschi_admin_site, chopsticks_admin_site, zmall_admin_site
 from core.main_admin_site import main_admin_site
+
+
+class ZmallBadgeListFilter(admin.SimpleListFilter):
+    """Readable badge filter: Bestseller, Sale, or None (no permutations)."""
+    title = 'By badge'
+    parameter_name = 'badge'
+
+    def lookups(self, request, model_admin):
+        return [
+            ('bestseller', 'Bestseller'),
+            ('sale', 'Sale'),
+            ('none', 'None'),
+        ]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if not value:
+            return queryset
+        if value == 'none':
+            return queryset.filter(badges=[])
+        # Single-badge filter (DB-agnostic for JSONField)
+        if connection.vendor == 'sqlite':
+            return queryset.filter(badges__icontains=f'"{value}"')
+        return queryset.filter(badges__contains=[value])
+
+
+class ZmallCategoryListFilter(admin.SimpleListFilter):
+    """Category filter limited to ZMall categories (same business as the admin site)."""
+    title = 'category'
+    parameter_name = 'category'
+
+    def lookups(self, request, model_admin):
+        if not hasattr(model_admin.admin_site, 'get_business_settings'):
+            return []
+        business_settings = model_admin.admin_site.get_business_settings()
+        if not business_settings:
+            return []
+        categories = Category.objects.filter(restaurant_settings=business_settings).order_by('sort_order', 'name')
+        return [(c.pk, str(c.name)) for c in categories]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(category_id=self.value())
+        return queryset
 
 
 class BusinessAdminMixin:
@@ -413,7 +458,7 @@ class ZmallMenuItemAdmin(BusinessAdminMixin, ModelAdmin):
     class Media:
         js = ('menu/js/zmall_sizes.js',)
     list_display = ['name', 'category', 'gender', 'price_display', 'is_available', 'badges_display', 'sku']
-    list_filter = ['category', 'gender', 'is_available', 'is_featured']
+    list_filter = [ZmallCategoryListFilter, 'gender', ZmallBadgeListFilter, 'is_available', 'is_featured']
     search_fields = ['name', 'description', 'category__name']
     ordering = ['category', '-created_at', 'name']
     list_editable = ['is_available', 'sku']
