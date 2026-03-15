@@ -38,11 +38,12 @@ class MenuItemSerializer(serializers.ModelSerializer):
     badges_display = serializers.SerializerMethodField()
     formatted_price = serializers.CharField(read_only=True)
     image = serializers.SerializerMethodField()
+    size = serializers.SerializerMethodField()
     
     class Meta:
         model = MenuItem
         fields = [
-            'id', 'name', 'description', 'size', 'sku', 'price', 'formatted_price',
+            'id', 'name', 'description', 'size', 'sizes', 'sku', 'price', 'formatted_price',
             'category', 'category_name', 'category_id', 'image',
             'badges', 'badges_display', 'allergens', 'nutritional_info',
             'is_available', 'is_featured', 'preparation_time', 'sort_order'
@@ -50,6 +51,14 @@ class MenuItemSerializer(serializers.ModelSerializer):
     
     def get_image(self, obj):
         return _media_url(obj.image) if obj.image else None
+    
+    def get_size(self, obj):
+        """Return size string: model size if set, else comma-joined sizes (ZMall apparel)."""
+        if obj.size and str(obj.size).strip():
+            return obj.size
+        if getattr(obj, 'sizes', None):
+            return ', '.join(str(s) for s in obj.sizes)
+        return ''
     
     def get_badges_display(self, obj):
         """Get badge display names."""
@@ -84,17 +93,25 @@ class FeaturedItemsSerializer(serializers.ModelSerializer):
     formatted_price = serializers.CharField(read_only=True)
     badges_display = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
+    size = serializers.SerializerMethodField()
     
     class Meta:
         model = MenuItem
         fields = [
-            'id', 'name', 'description', 'size', 'sku', 'price', 'formatted_price',
+            'id', 'name', 'description', 'size', 'sizes', 'sku', 'price', 'formatted_price',
             'category_name', 'image', 'badges', 'badges_display',
             'is_available', 'preparation_time'
         ]
     
     def get_image(self, obj):
         return _media_url(obj.image) if obj.image else None
+    
+    def get_size(self, obj):
+        if obj.size and str(obj.size).strip():
+            return obj.size
+        if getattr(obj, 'sizes', None):
+            return ', '.join(str(s) for s in obj.sizes)
+        return ''
     
     def get_badges_display(self, obj):
         """Get badge display names."""
@@ -108,17 +125,25 @@ class MenuSearchSerializer(serializers.ModelSerializer):
     formatted_price = serializers.CharField(read_only=True)
     badges_display = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
+    size = serializers.SerializerMethodField()
     
     class Meta:
         model = MenuItem
         fields = [
-            'id', 'name', 'description', 'size', 'sku', 'price', 'formatted_price',
+            'id', 'name', 'description', 'size', 'sizes', 'sku', 'price', 'formatted_price',
             'category_name', 'image', 'badges', 'badges_display',
             'is_available', 'is_featured'
         ]
     
     def get_image(self, obj):
         return _media_url(obj.image) if obj.image else None
+    
+    def get_size(self, obj):
+        if obj.size and str(obj.size).strip():
+            return obj.size
+        if getattr(obj, 'sizes', None):
+            return ', '.join(str(s) for s in obj.sizes)
+        return ''
     
     def get_badges_display(self, obj):
         """Get badge display names."""
