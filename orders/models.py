@@ -159,6 +159,9 @@ class Order(models.Model):
     paystack_reference = models.CharField(max_length=100, blank=True, null=True, unique=True, help_text="Paystack transaction reference")
     paystack_access_code = models.CharField(max_length=100, blank=True, null=True, help_text="Paystack access code for transaction")
     payment_verified_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp when payment was verified")
+
+    # Inventory: set True when SKU is decremented on payment success; cleared when order is refunded/cancelled
+    stock_reduced = models.BooleanField(default=False, help_text="True after payment success reduced menu item SKU; restored on refund/cancel.")
     
     class Meta:
         verbose_name = 'Order'
@@ -197,6 +200,12 @@ class Order(models.Model):
             # Ensure totals are calculated if they're not set
             if not self.subtotal or not self.total_amount:
                 self._calculate_and_set_totals()
+        
+        # Restore stock when order is refunded or cancelled (any code path that sets these)
+        if self.pk and getattr(self, 'stock_reduced', False):
+            if self.payment_status == 'refunded' or self.status == 'cancelled':
+                from orders.services import restore_stock_for_order
+                restore_stock_for_order(self)
         
         super().save(*args, **kwargs)
     

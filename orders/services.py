@@ -1,5 +1,6 @@
 from decimal import Decimal
 from django.conf import settings as django_settings
+from django.db.models import F
 from django.shortcuts import get_object_or_404
 from .models import Order
 from addresses.models import Address
@@ -7,6 +8,52 @@ from menu.models import MenuItem
 from promotions.models import PromoCode
 from utils.geocoding import calculate_distance
 from core.models import RestaurantSettings
+
+
+class InsufficientStockError(Exception):
+    """Raised when an order item's menu_item has insufficient SKU to fulfill the order."""
+    def __init__(self, message, menu_item=None, quantity=None):
+        self.menu_item = menu_item
+        self.quantity = quantity
+        super().__init__(message)
+
+
+def reduce_stock_for_order(order):
+    """
+    Decrement MenuItem.sku by each order item's quantity. Idempotent: no-op if order.stock_reduced.
+    Call only from within a transaction with order locked (select_for_update).
+    Raises InsufficientStockError if any item has insufficient stock; transaction should roll back.
+    """
+    if getattr(order, 'stock_reduced', False):
+        return
+    for item in order.items.select_related('menu_item').all():
+        menu_item = item.menu_item
+        qty = item.quantity
+        updated = MenuItem.objects.filter(
+            pk=menu_item.pk,
+            sku__gte=qty,
+        ).update(sku=F('sku') - qty)
+        if updated != 1:
+            raise InsufficientStockError(
+                f"Insufficient stock for '{menu_item.name}' (need {qty}, has {menu_item.sku})",
+                menu_item=menu_item,
+                quantity=qty,
+            )
+    order.stock_reduced = True
+
+
+def restore_stock_for_order(order):
+    """
+    Restore MenuItem.sku by adding back each order item's quantity. No-op if not order.stock_reduced.
+    Call when order is refunded or cancelled (e.g. from Order.save() or when updating status).
+    """
+    if not getattr(order, 'stock_reduced', False):
+        return
+    for item in order.items.select_related('menu_item').all():
+        MenuItem.objects.filter(pk=item.menu_item_id).update(
+            sku=F('sku') + item.quantity
+        )
+    order.stock_reduced = False
 
 
 def calculate_delivery_fee(delivery_type, distance_km=None, subtotal=None, restaurant_settings=None):

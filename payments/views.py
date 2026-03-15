@@ -16,6 +16,8 @@ from core.utils import get_business_from_request, get_frontend_url_from_business
 from .models import Payment
 from .services import PaystackService, PaystackError, PaystackAPIError, PaystackVerificationError
 from orders.models import Order
+from orders.services import reduce_stock_for_order
+from orders.services import InsufficientStockError
 from loyalty.services import award_points_for_order
 from .services import kobo_to_naira
 
@@ -161,6 +163,14 @@ def verify_payment(request, reference):
                     order.payment_verified_at = timezone.now()
                     order.save()
                     
+                    # Decrement menu item SKU (idempotent). Rollback if insufficient stock.
+                    try:
+                        reduce_stock_for_order(order)
+                    except InsufficientStockError as e:
+                        logger.warning("Payment verify: insufficient stock for order %s: %s", order.id, e)
+                        raise
+                    order.save()
+                    
                     # Award loyalty points (within transaction)
                     if order.user:
                         award_points_for_order(order)
@@ -171,6 +181,12 @@ def verify_payment(request, reference):
                     order.save()
                 
                 payment.save()
+        except InsufficientStockError as e:
+            logger.warning("Payment verify: insufficient stock: %s", e)
+            return Response(
+                {'error': 'Insufficient stock', 'detail': str(e)},
+                status=status.HTTP_409_CONFLICT,
+            )
         except Exception as e:
             logger.error(f"Error updating payment status in transaction: {str(e)}")
             raise
@@ -275,11 +291,18 @@ class PaystackWebhookView(View):
                         order.payment_verified_at = timezone.now()
                         order.save()
                         
+                        # Decrement menu item SKU (idempotent). Rollback if insufficient stock.
+                        reduce_stock_for_order(order)
+                        order.save()
+                        
                         # Award loyalty points (within transaction)
                         if order.user:
                             award_points_for_order(order)
                         
                         logger.info("Webhook processed successfully for reference: %s", reference)
+                except InsufficientStockError as e:
+                    logger.warning("Webhook: insufficient stock for order %s: %s", order.id, e)
+                    return HttpResponse('Insufficient stock', status=409)
                 except Exception as e:
                     logger.error(f"Error processing webhook in transaction: {str(e)}")
                     # Don't return error to Paystack - we'll retry later
@@ -344,19 +367,34 @@ def payment_callback(request):
         result = paystack.verify_transaction(reference)
         logger.info(f"Payment verification result: {result.get('status')}")
         
-        # Update payment status
-        payment.paystack_status = result.get('status', '')
-        payment.verified_at = timezone.now()
-        
         if result.get('status') == 'success':
-            payment.status = 'success'
-            payment.order.payment_status = 'paid'
-            payment.order.payment_verified_at = timezone.now()
-            payment.order.save()
-            
-            # Award loyalty points
-            if payment.order.user:
-                award_points_for_order(payment.order)
+            from django.db import transaction
+            try:
+                with transaction.atomic():
+                    payment = Payment.objects.select_for_update().get(id=payment.id)
+                    order = payment.order
+                    order = Order.objects.select_for_update().get(id=order.id)
+                    if payment.status == 'success':
+                        logger.warning(f"Payment callback: {reference} already processed")
+                        frontend_url = get_frontend_url_from_business(order.restaurant_settings, request=request)
+                        redirect_url = f"{frontend_url.rstrip('/')}/payment/success?reference={reference}"
+                        return HttpResponseRedirect(redirect_url)
+                    payment.paystack_status = result.get('status', '')
+                    payment.verified_at = timezone.now()
+                    payment.status = 'success'
+                    payment.save()
+                    order.payment_status = 'paid'
+                    order.payment_verified_at = timezone.now()
+                    order.save()
+                    reduce_stock_for_order(order)
+                    order.save()
+                    if order.user:
+                        award_points_for_order(order)
+            except InsufficientStockError as e:
+                logger.warning("Payment callback: insufficient stock for order %s: %s", order.id, e)
+                frontend_url = get_frontend_url_from_business(payment.order.restaurant_settings, request=request)
+                redirect_url = f"{frontend_url.rstrip('/')}/payment/success?reference={reference}&error=insufficient_stock"
+                return HttpResponseRedirect(redirect_url)
             
             # Redirect to frontend success page
             # Use order's restaurant_settings to get correct frontend URL (multi-tenant)
