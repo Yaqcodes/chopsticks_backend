@@ -1,0 +1,170 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>{% trans 'Welcome to Roschi Water Admin' %}</h1>
+        <p>{% trans 'Manage your products, orders, payments, and business settings' %}</p>
+    </div>
+
+    <div class="dashboard-grid">
+        {% if app_list %}
+            {% for app in app_list %}
+                <div class="dashboard-app">
+                    <div class="dashboard-app-header">
+                        <h2>
+                            <a href="{{ app.app_url }}" title="{% blocktrans with name=app.name %}Models in the {{ name }} application{% endblocktrans %}">
+                                {{ app.name }}
+                            </a>
+                        </h2>
+                    </div>
+                    <div class="dashboard-app-models">
+                        {% for model in app.models %}
+                            <div class="dashboard-model">
+                                {% if model.admin_url %}
+                                    <div class="dashboard-model-link">
+                                        <a href="{{ model.admin_url }}" class="dashboard-model-name-link">
+                                            <span class="dashboard-model-name">{{ model.name }}</span>
+                                        </a>
+                                        {% if model.add_url %}
+                                            <a href="{{ model.add_url }}" class="dashboard-model-add" title="{% trans 'Add' %}">
+                                                <span class="dashboard-model-add-icon">+</span>
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="dashboard-model-name">{{ model.name }}</span>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>{% trans "You don't have permission to view or edit anything." %}</p>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.dashboard-container {
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.dashboard-header {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #e0f2fe;
+}
+
+.dashboard-header h1 {
+    color: #0284c7;
+    font-size: 28px;
+    margin-bottom: 8px;
+}
+
+.dashboard-header p {
+    color: #64748b;
+    font-size: 16px;
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.dashboard-app {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+
+.dashboard-app:hover {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dashboard-app-header {
+    background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+    padding: 15px 20px;
+}
+
+.dashboard-app-header h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.dashboard-app-header a {
+    color: white;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.dashboard-app-header a:hover {
+    text-decoration: underline;
+}
+
+.dashboard-app-models {
+    padding: 15px;
+}
+
+.dashboard-model {
+    padding: 10px 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.dashboard-model:last-child {
+    border-bottom: none;
+}
+
+.dashboard-model-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.dashboard-model-name-link {
+    text-decoration: none;
+    color: #1e293b;
+    transition: color 0.2s;
+    flex: 1;
+}
+
+.dashboard-model-name-link:hover {
+    color: #0284c7;
+}
+
+.dashboard-model-name {
+    font-size: 15px;
+    font-weight: 500;
+}
+
+.dashboard-model-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: #0ea5e9;
+    color: white;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 18px;
+    line-height: 1;
+    transition: background 0.2s;
+}
+
+.dashboard-model-add:hover {
+    background: #0284c7;
+}
+
+.dashboard-model-add-icon {
+    display: block;
+}
+</style>
+{% endblock %}

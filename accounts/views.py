@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import status, generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -15,6 +17,8 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.core.exceptions import ValidationError
 from decouple import config
 
+logger = logging.getLogger(__name__)
+
 from .models import User, SocialAccount
 from .serializers import (
     UserRegistrationSerializer, UserLoginSerializer, UserProfileSerializer,
@@ -22,6 +26,8 @@ from .serializers import (
     SocialLoginSerializer
 )
 from .google_oauth import validate_google_oauth_token
+from core.utils import get_business_from_request, get_frontend_url_from_business
+from core.models import RestaurantSettings
 
 
 class RegisterView(generics.CreateAPIView):
@@ -185,8 +191,12 @@ class SocialLoginView(generics.GenericAPIView):
         
         try:
             if provider == 'google':
-                # Validate Google OAuth token and get user info
-                google_user_info = validate_google_oauth_token(access_token)
+                # Get business context for OAuth validation
+                from core.utils import get_business_from_request
+                restaurant_settings = get_business_from_request(request)
+                
+                # Validate Google OAuth token and get user info (business-scoped)
+                google_user_info = validate_google_oauth_token(access_token, restaurant_settings)
                 
                 provider_user_id = google_user_info['provider_user_id']
                 email = google_user_info['email']
@@ -353,12 +363,15 @@ def token_refresh_view(request):
 def google_oauth_url(request):
     """Get Google OAuth authorization URL."""
     try:
+        from core.utils import get_business_from_request
         from .google_oauth import get_google_oauth_url
-        oauth_url = get_google_oauth_url()
+        
+        restaurant_settings = get_business_from_request(request)
+        oauth_url = get_google_oauth_url(restaurant_settings)
         
         return Response({
             'oauth_url': oauth_url,
-            'client_id': settings.SOCIAL_AUTH_GOOGLE_OAUTH2_KEY
+            'client_id': restaurant_settings.google_oauth_client_id
         })
     except Exception as e:
         return Response({
@@ -371,20 +384,63 @@ def google_oauth_url(request):
 def google_oauth_callback(request):
     """Handle Google OAuth callback and redirect to frontend."""
     try:
-        # Get the authorization code from the callback
+        # Get the authorization code and state from the callback
         code = request.GET.get('code')
+        state_param = request.GET.get('state')
+        
+        # Identify business from state parameter (preferred method)
+        # This is necessary because Google redirects from accounts.google.com,
+        # so request headers won't contain the frontend domain
+        restaurant_settings = None
+        if state_param:
+            try:
+                import base64
+                import json
+                # Decode state parameter (add padding if needed)
+                state_padded = state_param + '=' * (4 - len(state_param) % 4)
+                state_data = json.loads(base64.urlsafe_b64decode(state_padded).decode())
+                business_id = state_data.get('business_id')
+                if business_id:
+                    restaurant_settings = RestaurantSettings.objects.get(id=business_id)
+                    logger.debug(f"Identified business from state parameter: {restaurant_settings.domain}")
+            except Exception as e:
+                logger.warning(f"Failed to extract business from state parameter: {str(e)}")
+        
+        # Fallback: try to identify from request headers (for backward compatibility)
+        if not restaurant_settings:
+            try:
+                restaurant_settings = get_business_from_request(request)
+                logger.debug(f"Identified business from request headers: {restaurant_settings.domain}")
+            except ValueError as ve:
+                logger.warning(f"Business identification from request headers failed: {str(ve)}")
+        
+        # Last resort: if still no business found, this is an error
+        if not restaurant_settings:
+            logger.error("Could not identify business for OAuth callback")
+            # Try to get a default frontend URL for error redirect
+            try:
+                default_settings = RestaurantSettings.objects.first()
+                if default_settings:
+                    frontend_url = get_frontend_url_from_business(default_settings, request=request)
+                else:
+                    frontend_url = settings.OAUTH_BASE_URL
+            except:
+                frontend_url = settings.OAUTH_BASE_URL
+            return redirect(f"{frontend_url}/?oauth=error&message=Business identification failed")
+        
+        frontend_url = get_frontend_url_from_business(restaurant_settings, request=request)
+        
         if not code:
             # Redirect to frontend with error
-            frontend_url = settings.BASE_URL
             return redirect(f"{frontend_url}/?oauth=error&message=No authorization code received")
         
-        # Exchange the authorization code for an access token
+        # Exchange the authorization code for an access token (business-scoped)
         from .google_oauth import exchange_code_for_token
-        access_token = exchange_code_for_token(code)
+        access_token = exchange_code_for_token(code, restaurant_settings)
         
-        # Use the existing social login logic
+        # Use the existing social login logic (business-scoped)
         from .google_oauth import validate_google_oauth_token
-        google_user_info = validate_google_oauth_token(access_token)
+        google_user_info = validate_google_oauth_token(access_token, restaurant_settings)
         
         provider_user_id = google_user_info['provider_user_id']
         email = google_user_info['email']
@@ -394,7 +450,6 @@ def google_oauth_callback(request):
         
         # Check if email is verified
         if not google_user_info.get('email_verified', False):
-            frontend_url = settings.BASE_URL
             return redirect(f"{frontend_url}/?oauth=error&message=Email not verified with Google")
         
         # Check if social account exists
@@ -472,7 +527,6 @@ def google_oauth_callback(request):
         user_data = UserProfileSerializer(user).data
         
         # Redirect to frontend with success and tokens
-        frontend_url = settings.BASE_URL
         tokens_param = f"access={refresh.access_token}&refresh={str(refresh)}"
         user_param = f"user={user_data['id']}"
         
@@ -480,6 +534,38 @@ def google_oauth_callback(request):
         
     except Exception as e:
         # Redirect to frontend with error
-        frontend_url = settings.BASE_URL
+        # Try to get frontend URL from state parameter or request if not already set
+        if 'frontend_url' not in locals():
+            restaurant_settings = None
+            state_param = request.GET.get('state')
+            
+            # Try to get business from state parameter
+            if state_param:
+                try:
+                    import base64
+                    import json
+                    state_padded = state_param + '=' * (4 - len(state_param) % 4)
+                    state_data = json.loads(base64.urlsafe_b64decode(state_padded).decode())
+                    business_id = state_data.get('business_id')
+                    if business_id:
+                        restaurant_settings = RestaurantSettings.objects.get(id=business_id)
+                except Exception:
+                    pass
+            
+            # Fallback to request-based identification
+            if not restaurant_settings:
+                try:
+                    restaurant_settings = get_business_from_request(request)
+                except ValueError:
+                    # Last resort: use first available business
+                    restaurant_settings = RestaurantSettings.objects.first()
+            
+            if restaurant_settings:
+                frontend_url = get_frontend_url_from_business(restaurant_settings, request=request)
+            else:
+                # Absolute last resort: use backend URL
+                frontend_url = settings.OAUTH_BASE_URL
+                logger.error("OAuth callback error - could not identify business for error redirect")
+        
         error_message = str(e).replace(' ', '%20')
         return redirect(f"{frontend_url}/?oauth=error&message={error_message}")

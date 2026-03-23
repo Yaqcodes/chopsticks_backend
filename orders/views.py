@@ -9,6 +9,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from decimal import Decimal
 from datetime import datetime
 
+from core.utils import get_business_from_request
 from .models import Order, OrderItem
 from .serializers import (
     OrderSerializer, OrderListSerializer, OrderDetailSerializer,
@@ -37,7 +38,18 @@ class OrderListView(generics.ListAPIView):
         if getattr(self, 'swagger_fake_view', False):
             return Order.objects.none()
         
-        queryset = Order.objects.filter(user=self.request.user)
+        restaurant_settings = get_business_from_request(self.request)
+        user = self.request.user
+        
+        # Get orders for authenticated user - include both:
+        # 1. Orders where user field matches
+        # 2. Guest orders where email matches user's email (for orders placed before login)
+        from django.db.models import Q
+        queryset = Order.objects.filter(
+            restaurant_settings=restaurant_settings,
+        ).filter(
+            Q(user=user) | Q(guest_email=user.email)
+        )
         
         # Handle date filtering manually
         date_from = self.request.query_params.get('date_from')
@@ -72,7 +84,11 @@ class OrderDetailView(generics.RetrieveAPIView):
         # Handle Swagger schema generation
         if getattr(self, 'swagger_fake_view', False):
             return Order.objects.none()
-        return Order.objects.filter(user=self.request.user)
+        restaurant_settings = get_business_from_request(self.request)
+        return Order.objects.filter(
+            user=self.request.user,
+            restaurant_settings=restaurant_settings,
+        )
 
 
 class AdminOrderListView(generics.ListAPIView):
@@ -94,7 +110,8 @@ class AdminOrderListView(generics.ListAPIView):
         if not self.request.user.is_staff:
             return Order.objects.none()
         
-        queryset = Order.objects.all()
+        restaurant_settings = get_business_from_request(self.request)
+        queryset = Order.objects.filter(restaurant_settings=restaurant_settings)
         
         # Handle date filtering manually
         date_from = self.request.query_params.get('date_from')
@@ -122,39 +139,99 @@ class AdminOrderListView(generics.ListAPIView):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def create_order(request):
-    """Create a new order for both authenticated and guest users."""
+    """
+    Create a new order for both authenticated and guest users.
     
+    Uses atomic transactions to ensure data consistency and prevent race conditions.
+    Implements retry logic for concurrent order creation scenarios.
+    """
+    import time
+    import random
+    from django.db import IntegrityError
+    
+    max_retries = 3
+    user_id = request.user.id if request.user.is_authenticated else 'guest'
+    
+    # Security: Validate business identification before processing
     try:
-        # Log the incoming request data for debugging
-        user_id = request.user.id if request.user.is_authenticated else 'guest'
-        logger.info(f"Creating order for user {user_id} with data: {request.data}")
-        
-        serializer = UnifiedOrderSerializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        
-        # Create the order using the serializer
-        order = serializer.save()
-        
-        # Award points for the order (commented out as requested)
-        # if order.user:
-        #     award_points_for_order(order)
-        
-        # Use the serializer to return the response data
+        restaurant_settings = get_business_from_request(request)
+    except ValueError as e:
+        logger.error(f"Business identification failed for order creation: {str(e)}")
+        return Response({
+            'error': 'Unable to identify business. Please ensure your request includes proper headers.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    order = None
+    for attempt in range(max_retries):
         try:
-            response_serializer = OrderDetailSerializer(order)
-            response_data = response_serializer.data
-            logger.info(f"Order {order.order_number} created successfully for user {user_id}")
+            # Log the incoming request data for debugging
+            logger.info(f"Creating order for user {user_id} (attempt {attempt + 1}/{max_retries})")
             
-            return Response({
-                'message': 'Order created successfully.',
-                'order': response_data
-            }, status=status.HTTP_201_CREATED)
+            serializer = UnifiedOrderSerializer(data=request.data, context={'request': request})
+            serializer.is_valid(raise_exception=True)
             
-        except Exception as serialization_error:
-            logger.error(f"Error serializing order response: {serialization_error}")
-            # Return a simplified response if serialization fails
-            return Response({
-                'message': 'Order created successfully.',
+            # Create the order using the serializer (already uses atomic transaction)
+            order = serializer.save()
+            
+            # Success - break out of retry loop
+            break
+            
+        except IntegrityError as e:
+            # Handle unique constraint violations (race condition)
+            if 'unique' in str(e).lower() or 'duplicate' in str(e).lower():
+                if attempt < max_retries - 1:
+                    # Exponential backoff with jitter
+                    wait_time = (2 ** attempt) * 0.1 + random.uniform(0, 0.1)
+                    logger.warning(
+                        f"Order number collision detected (attempt {attempt + 1}/{max_retries}). "
+                        f"Retrying after {wait_time:.2f}s..."
+                    )
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    # Last attempt failed
+                    logger.error(f"Failed to create order after {max_retries} attempts due to race condition")
+                    return Response({
+                        'error': 'Order creation failed due to concurrent request. Please try again.'
+                    }, status=status.HTTP_409_CONFLICT)
+            else:
+                # Other integrity error
+                logger.error(f"Integrity error creating order: {str(e)}")
+                raise
+                
+        except Exception as e:
+            # Log and re-raise other exceptions
+            logger.error(f"Error creating order for user {user_id}: {str(e)}")
+            raise
+    
+    # If we get here, order was created successfully
+    if order is None:
+        # This shouldn't happen, but handle it just in case
+        logger.error("Order creation failed but no exception was raised")
+        return Response({
+            'error': 'Order creation failed unexpectedly. Please try again.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    # Award points for the order (commented out as requested)
+    # if order.user:
+    #     award_points_for_order(order)
+    
+    # Use the serializer to return the response data
+    try:
+        response_serializer = OrderDetailSerializer(order)
+        response_data = response_serializer.data
+        logger.info(f"Order {order.order_number} created successfully for user {user_id}")
+        
+        return Response({
+            'message': 'Order created successfully.',
+            'order': response_data
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as serialization_error:
+        logger.error(f"Error serializing order response: {serialization_error}")
+        # Return a simplified response if serialization fails
+        return Response({
+            'message': 'Order created successfully.',
                 'order': {
                     'id': order.id,
                     'order_number': order.order_number,
@@ -162,11 +239,6 @@ def create_order(request):
                     'total_amount': str(order.total_amount)
                 }
             }, status=status.HTTP_201_CREATED)
-            
-    except Exception as e:
-        user_id = request.user.id if request.user.is_authenticated else 'guest'
-        logger.error(f"Error creating order for user {user_id}: {str(e)}")
-        raise
 
 
 @api_view(['POST'])
@@ -174,7 +246,13 @@ def create_order(request):
 def cancel_order(request, order_id):
     """Cancel an order."""
     
-    order = get_object_or_404(Order, id=order_id, user=request.user)
+    restaurant_settings = get_business_from_request(request)
+    order = get_object_or_404(
+        Order, 
+        id=order_id, 
+        user=request.user,
+        restaurant_settings=restaurant_settings
+    )
     
     # Check if order can be cancelled
     if order.status in ['delivered', 'cancelled', 'refunded']:
@@ -197,8 +275,13 @@ def cancel_order(request, order_id):
 def order_tracking(request, order_number):
     """Track an order by order number."""
     
+    restaurant_settings = get_business_from_request(request)
+    
     try:
-        order = Order.objects.get(order_number=order_number)
+        order = Order.objects.get(
+            order_number=order_number,
+            restaurant_settings=restaurant_settings
+        )
     except Order.DoesNotExist:
         return Response({
             'error': 'Order not found.'
@@ -257,12 +340,14 @@ def calculate_cart_totals_view(request):
             }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
+        restaurant_settings = get_business_from_request(request)
         totals = calculate_cart_totals(
             cart_items=cart_items_with_prices,
             delivery_type=validated_data['delivery_type'],
             delivery_fee=validated_data['delivery_fee'],
             promo_code=validated_data.get('promotion_code'),
-            user_reward=user_reward
+            user_reward=user_reward,
+            restaurant_settings=restaurant_settings
         )
 
         
@@ -317,7 +402,12 @@ def update_order_status(request, order_id):
             'error': 'You do not have permission to update order status.'
         }, status=status.HTTP_403_FORBIDDEN)
     
-    order = get_object_or_404(Order, id=order_id)
+    restaurant_settings = get_business_from_request(request)
+    order = get_object_or_404(
+        Order, 
+        id=order_id,
+        restaurant_settings=restaurant_settings
+    )
     serializer = OrderStatusUpdateSerializer(data=request.data)
     
     if not serializer.is_valid():

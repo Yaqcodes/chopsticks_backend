@@ -12,29 +12,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Encoding and locale settings
 DEFAULT_CHARSET = 'utf-8'
 FILE_CHARSET = 'utf-8'
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Africa/Lagos'
-USE_I18N = True
-USE_L10N = True
-USE_TZ = True
 
-# Base URL for frontend
-BASE_URL = config('BASE_URL', default='http://localhost:5173')
+# Base URL for backend (used for callbacks, etc.)
+BACKEND_BASE_URL = config('BASE_URL', default='stringtheorylabs.pythonanywhere.com')
 
-# Production frontend URLs
-PRODUCTION_FRONTEND_URLS = [
-    'https://chopsticks-frontend.vercel.app',
-    'https://chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app',
-    'https://chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app',
-    'https://chopsticksandbowls.com',
-    'https://www.chopsticksandbowls.com',
-]
+# NOTE: FRONTEND_BASE_URL has been removed for strict multi-tenancy.
+# Frontend URLs are now determined from RestaurantSettings.domain via get_frontend_url_from_business().
+# Each business must have its domain configured in RestaurantSettings.
 
 # Environment Variables for Production (set these on PythonAnywhere):
 # DEBUG=False
-# ALLOWED_HOSTS=your-pythonanywhere-domain.com,chopsticks-frontend.vercel.app,chopsticksandbowls.com
-# CORS_ALLOWED_ORIGINS=https://chopsticks-frontend.vercel.app,https://chopsticksandbowls.com
+# ALLOWED_HOSTS=stringtheorylabs.pythonanywhere.com,roschiwater.com,www.roschiwater.com,chopsticksandbowls.com,www.chopsticksandbowls.com
+# CORS_ALLOWED_ORIGINS=https://roschiwater.com,https://www.roschiwater.com,https://chopsticksandbowls.com,https://www.chopsticksandbowls.com
 # SECRET_KEY=your-production-secret-key
+# BASE_URL=https://stringtheorylabs.pythonanywhere.com
+# OAUTH_BASE_URL=https://stringtheorylabs.pythonanywhere.com
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-here')
@@ -42,11 +34,12 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-here'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,chopsticks-frontend.vercel.app,chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app,chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app,chopsticksandbowls.com,www.chopsticksandbowls.com,chopsticksandb0wls.pythonanywhere.com', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,chopsticks-frontend.vercel.app,chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app,chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app,chopsticksandbowls.com,www.chopsticksandbowls.com,chopsticksandb0wls.pythonanywhere.com,stringtheorylabs.pythonanywhere.com,roschiwater.com,www.roschiwater.com,zmall.ng,www.zmall.ng', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # Application definition
 INSTALLED_APPS = [
-    'unfold',  # Must come before django.contrib.admin
+    'unfold',  # Unfold must be before django.contrib.admin
+    'unfold.contrib.filters',  # Optional: Advanced filters
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -76,6 +69,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -139,31 +133,35 @@ AUTHENTICATION_BACKENDS = [
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Africa/Lagos'
 USE_I18N = True
+USE_L10N = True
 USE_TZ = True
-TIME_ZONE = "Africa/Lagos"
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 
-# STATIC_ROOT is where collectstatic will put files for production
+# STATIC_ROOT is where collectstatic will put files; WhiteNoise serves these when DEBUG=False
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# WhiteNoise: serve static files without needing DEBUG or a separate web server (admin, unfold, etc.)
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # STATICFILES_DIRS is where Django looks for static files during development
 STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
 
-# Media files
+# Media files (uploaded content: product images, etc.)
+# Use absolute path so serving works regardless of runserver cwd
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_ROOT = str((BASE_DIR / 'media').resolve())
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173,http://127.0.0.1:5173,https://chopsticks-frontend.vercel.app,https://chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app,https://chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app,https://chopsticksandbowls.com,https://www.chopsticksandbowls.com', cast=lambda v: [s.strip() for s in v.split(',')])
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173,http://127.0.0.1:5173,https://chopsticks-frontend.vercel.app,https://chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app,https://chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app,https://chopsticksandbowls.com,https://www.chopsticksandbowls.com,https://roschiwater.com,https://www.roschiwater.com,https://zmall.ng,https://www.zmall.ng', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # Additional CORS settings for production
 CORS_ALLOW_CREDENTIALS = True
@@ -186,6 +184,7 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'ngrok-skip-browser-warning',  # Allow ngrok bypass header
 ]
 
 # Security settings for production
@@ -255,10 +254,10 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@chopsticksand
 # Google Maps API
 GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
 
-# Social Authentication settings
-SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = config('SOCIAL_AUTH_GOOGLE_OAUTH2_KEY', default='')
-SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = config('SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET', default='')
-OAUTH_BASE_URL = config('OAUTH_BASE_URL', default='https://chopsticksandb0wls.pythonanywhere.com')
+# OAuth base URL - derived from BACKEND_BASE_URL (can be overridden via OAUTH_BASE_URL env var)
+# NOTE: OAuth credentials are now business-specific and stored in RestaurantSettings model
+# Each business must have its own Google OAuth credentials configured
+OAUTH_BASE_URL = config('OAUTH_BASE_URL', default=f"https://{BACKEND_BASE_URL}")
 
 SOCIAL_AUTH_FACEBOOK_KEY = config('SOCIAL_AUTH_FACEBOOK_KEY', default='')
 SOCIAL_AUTH_FACEBOOK_SECRET = config('SOCIAL_AUTH_FACEBOOK_SECRET', default='')
@@ -267,11 +266,8 @@ SOCIAL_AUTH_APPLE_ID_CLIENT = config('SOCIAL_AUTH_APPLE_ID_CLIENT', default='')
 SOCIAL_AUTH_APPLE_ID_TEAM = config('SOCIAL_AUTH_APPLE_ID_TEAM', default='')
 SOCIAL_AUTH_APPLE_ID_KEY = config('SOCIAL_AUTH_APPLE_ID_KEY', default='')
 
-# Restaurant settings
-RESTAURANT_NAME = config('RESTAURANT_NAME', default='Chopsticks and Bowls')
-RESTAURANT_ADDRESS = config('RESTAURANT_ADDRESS', default='')
-RESTAURANT_PHONE = config('RESTAURANT_PHONE', default='')
-RESTAURANT_EMAIL = config('RESTAURANT_EMAIL', default='')
+# Restaurant settings - Now handled by RestaurantSettings model
+# These variables are no longer used and have been removed for multi-tenancy
 
 # Points system settings
 POINTS_PER_DOLLAR = config('POINTS_PER_DOLLAR', default=1, cast=int)
@@ -292,16 +288,16 @@ SILVER_TIER_POINTS = config('SILVER_TIER_POINTS', default=50000, cast=int)
 GOLD_TIER_POINTS = config('GOLD_TIER_POINTS', default=100000, cast=int)
 PLATINUM_TIER_POINTS = config('PLATINUM_TIER_POINTS', default=250000, cast=int)
 
-# Order settings - Now handled by RestaurantSettings model
-MINIMUM_ORDER_AMOUNT=config('MINIMUM_ORDER_AMOUNT', default=1000.00, cast=float)
-DEFAULT_DELIVERY_FEE_BASE=config('DELIVERY_FEE_BASE', default=2000.00, cast=float)
-DEFAULT_DELIVERY_FEE_PER_KM=config('DELIVERY_FEE_PER_KM', default=150.00, cast=float)
-DEFAULT_TAX_RATE=config('TAX_RATE', default=0.075, cast=float)
+# Order settings - Defaults for RestaurantSettings model (used when creating new businesses)
+# These are defaults only; each business has its own values in RestaurantSettings
+DEFAULT_DELIVERY_FEE_BASE = config('DELIVERY_FEE_BASE', default=2000.00, cast=float)
+DEFAULT_DELIVERY_FEE_PER_KM = config('DELIVERY_FEE_PER_KM', default=150.00, cast=float)
+DEFAULT_TAX_RATE = config('TAX_RATE', default=0.075, cast=float)
 
 # Paystack payment settings
-PAYSTACK_SECRET_KEY = config('PAYSTACK_SECRET_KEY_TEST', default='')
-PAYSTACK_PUBLIC_KEY = config('PAYSTACK_PUBLIC_KEY_TEST', default='')
-PAYSTACK_CALLBACK_URL = BASE_URL + '/payment/callback'
+# NOTE: Paystack keys are now business-specific and stored in RestaurantSettings model
+# Each business must have its own Paystack keys configured
+PAYSTACK_CALLBACK_URL = BACKEND_BASE_URL + '/api/payments/callback/'
 PAYSTACK_BASE_URL = config('PAYSTACK_BASE_URL', default='https://api.paystack.co')
 
 # Django Unfold settings
@@ -315,4 +311,85 @@ UNFOLD = {
     "SCRIPTS": [
         lambda request: "/static/js/custom-admin.js",
     ],
+    "COLORS": {
+        "primary": {
+            "50": "250 245 255",
+            "100": "243 232 255",
+            "200": "233 213 255",
+            "300": "216 180 254",
+            "400": "192 132 252",
+            "500": "168 85 247",
+            "600": "147 51 234",
+            "700": "126 34 206",
+            "800": "107 33 168",
+            "900": "88 28 135",
+            "950": "59 7 100",
+        },
+    },
+}
+
+# Roschi Water Unfold settings (for custom admin site)
+ROSCHI_UNFOLD = {
+    "SITE_TITLE": "Roschi Water Admin",
+    "SITE_HEADER": "Roschi Water",
+    "SITE_URL": "/roschi-admin/",
+    "COLORS": {
+        "primary": {
+            "50": "240 249 255",  # Water blue shades
+            "100": "224 242 254",
+            "200": "186 230 253",
+            "300": "125 211 252",
+            "400": "56 189 248",
+            "500": "14 165 233",  # Primary water blue
+            "600": "2 132 199",   # Darker blue
+            "700": "3 105 161",
+            "800": "7 89 133",
+            "900": "12 74 110",
+            "950": "8 47 73",
+        },
+    },
+}
+
+# Chopsticks & Bowls Unfold settings (for custom admin site)
+CHOPSTICKS_UNFOLD = {
+    "SITE_TITLE": "Chopsticks & Bowls Admin",
+    "SITE_HEADER": "Chopsticks & Bowls",
+    "SITE_URL": "/cb-admin/",
+    "COLORS": {
+        "primary": {
+            "50": "250 245 255",  # Purple shades (matching main UNFOLD)
+            "100": "243 232 255",
+            "200": "233 213 255",
+            "300": "216 180 254",
+            "400": "192 132 252",
+            "500": "168 85 247",
+            "600": "147 51 234",
+            "700": "126 34 206",
+            "800": "107 33 168",
+            "900": "88 28 135",
+            "950": "59 7 100",
+        },
+    },
+}
+
+# ZMall Unfold settings (clothing & apparel – white primary, black secondary)
+ZMALL_UNFOLD = {
+    "SITE_TITLE": "ZMall Admin",
+    "SITE_HEADER": "ZMall",
+    "SITE_URL": "/zmall-admin/",
+    "COLORS": {
+        "primary": {
+            "50": "250 250 250",
+            "100": "245 245 245",
+            "200": "229 229 229",
+            "300": "212 212 212",
+            "400": "163 163 163",
+            "500": "115 115 115",
+            "600": "82 82 82",
+            "700": "64 64 64",
+            "800": "38 38 38",
+            "900": "23 23 23",
+            "950": "10 10 10",
+        },
+    },
 }

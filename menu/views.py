@@ -3,9 +3,22 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Q
+from django.db import connection
+from django.db.models import Q, Case, When
 
+from core.utils import get_business_from_request
 from .models import Category, MenuItem
+
+
+def filter_queryset_by_badge(queryset, badge):
+    """Filter by badge in a way that works on SQLite and PostgreSQL (and other DBs)."""
+    if not badge:
+        return queryset
+    # PostgreSQL (and MySQL) support JSONField __contains with list; SQLite does not.
+    if connection.vendor == 'sqlite':
+        # Match JSON array element e.g. ["bestseller"] or ["sale","bestseller"]
+        return queryset.filter(badges__icontains=f'"{badge}"')
+    return queryset.filter(badges__contains=[badge])
 from .serializers import (
     CategorySerializer, MenuItemSerializer, MenuItemDetailSerializer,
     FeaturedItemsSerializer, MenuSearchSerializer
@@ -13,22 +26,36 @@ from .serializers import (
 
 
 class CategoryListView(generics.ListAPIView):
-    """List all active menu categories."""
+    """List all active menu categories for the current business."""
     
-    queryset = Category.objects.filter(is_active=True)
     serializer_class = CategorySerializer
     permission_classes = [AllowAny]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ['sort_order', 'name']
     ordering = ['sort_order']
+    
+    def get_queryset(self):
+        restaurant_settings = get_business_from_request(self.request)
+        # Return categories for this business
+        return Category.objects.filter(
+            is_active=True,
+            restaurant_settings=restaurant_settings
+        ).distinct()
 
 
 class CategoryDetailView(generics.RetrieveAPIView):
     """Get detailed information about a specific category."""
     
-    queryset = Category.objects.filter(is_active=True)
     serializer_class = CategorySerializer
     permission_classes = [AllowAny]
+    
+    def get_queryset(self):
+        restaurant_settings = get_business_from_request(self.request)
+        # Return categories for this business
+        return Category.objects.filter(
+            is_active=True,
+            restaurant_settings=restaurant_settings
+        ).distinct()
 
 
 class MenuItemListView(generics.ListAPIView):
@@ -44,17 +71,28 @@ class MenuItemListView(generics.ListAPIView):
     ordering = ['category', 'sort_order', 'name']
     
     def get_queryset(self):
-        queryset = super().get_queryset()
+        restaurant_settings = get_business_from_request(self.request)
+        queryset = MenuItem.objects.filter(
+            is_available=True,
+            restaurant_settings=restaurant_settings,
+        )
         
-        # Filter by category if provided
+        # Filter by category if provided (by id or slug)
         category_id = self.request.query_params.get('category_id')
+        category_slug = self.request.query_params.get('category_slug')
         if category_id:
             queryset = queryset.filter(category_id=category_id)
+        elif category_slug:
+            category = Category.objects.filter(
+                restaurant_settings=restaurant_settings,
+                slug=category_slug.strip()
+            ).first()
+            if category:
+                queryset = queryset.filter(category=category)
         
         # Filter by badge if provided
         badge = self.request.query_params.get('badge')
-        if badge:
-            queryset = queryset.filter(badges__contains=[badge])
+        queryset = filter_queryset_by_badge(queryset, badge)
         
         # Filter by price range if provided
         min_price = self.request.query_params.get('min_price')
@@ -65,13 +103,35 @@ class MenuItemListView(generics.ListAPIView):
         if max_price:
             queryset = queryset.filter(price__lte=max_price)
         
+        # Filter by explicit id list (e.g. SubCategories section). Preserve order.
+        ids_param = self.request.query_params.get('ids')
+        if ids_param:
+            try:
+                id_list = [int(x.strip()) for x in ids_param.split(',') if x.strip()]
+                if id_list:
+                    # Preserve order: filter by ids then order by position in id_list
+                    ordering = self._order_by_ids(id_list)
+                    queryset = queryset.filter(id__in=id_list).order_by(ordering)
+            except (ValueError, TypeError):
+                pass
+        
         return queryset
+    
+    def _order_by_ids(self, id_list):
+        """Return Case/When ordering so results match id_list order."""
+        return Case(*[When(id=x, then=pos) for pos, x in enumerate(id_list)])
 
 
 class MenuItemDetailView(generics.RetrieveAPIView):
     """Get detailed information about a specific menu item."""
     
     queryset = MenuItem.objects.filter(is_available=True)
+    def get_queryset(self):
+        restaurant_settings = get_business_from_request(self.request)
+        return MenuItem.objects.filter(
+            is_available=True,
+            restaurant_settings=restaurant_settings,
+        )
     serializer_class = MenuItemDetailSerializer
     permission_classes = [AllowAny]
 
@@ -80,6 +140,13 @@ class FeaturedItemsView(generics.ListAPIView):
     """List all featured menu items."""
     
     queryset = MenuItem.objects.filter(is_available=True, is_featured=True)
+    def get_queryset(self):
+        restaurant_settings = get_business_from_request(self.request)
+        return MenuItem.objects.filter(
+            is_available=True,
+            is_featured=True,
+            restaurant_settings=restaurant_settings,
+        )
     serializer_class = FeaturedItemsSerializer
     permission_classes = [AllowAny]
     filter_backends = [filters.OrderingFilter]
@@ -92,6 +159,7 @@ class FeaturedItemsView(generics.ListAPIView):
 def menu_search(request):
     """Search menu items by name, description, or category."""
     
+    restaurant_settings = get_business_from_request(request)
     query = request.query_params.get('q', '')
     if not query:
         return Response({'error': 'Search query is required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -99,6 +167,7 @@ def menu_search(request):
     # Search in name, description, and category name
     queryset = MenuItem.objects.filter(
         Q(is_available=True) &
+        Q(restaurant_settings=restaurant_settings) &
         (Q(name__icontains=query) | 
          Q(description__icontains=query) | 
          Q(category__name__icontains=query))
@@ -106,12 +175,18 @@ def menu_search(request):
     
     # Apply additional filters if provided
     category_id = request.query_params.get('category_id')
+    category_slug = request.query_params.get('category_slug')
     if category_id:
         queryset = queryset.filter(category_id=category_id)
-    
-    badge = request.query_params.get('badge')
-    if badge:
-        queryset = queryset.filter(badges__contains=[badge])
+    elif category_slug:
+        category = Category.objects.filter(
+            restaurant_settings=restaurant_settings,
+            slug=category_slug.strip()
+        ).first()
+        if category:
+            queryset = queryset.filter(category=category)
+
+    queryset = filter_queryset_by_badge(queryset, request.query_params.get('badge'))
     
     # Serialize results
     serializer = MenuSearchSerializer(queryset, many=True)
@@ -128,14 +203,21 @@ def menu_search(request):
 def menu_by_category(request, category_id):
     """Get all menu items for a specific category."""
     
+    restaurant_settings = get_business_from_request(request)
     try:
-        category = Category.objects.get(id=category_id, is_active=True)
+        # Validate category belongs to this business
+        category = Category.objects.get(
+            id=category_id,
+            is_active=True,
+            restaurant_settings=restaurant_settings
+        )
     except Category.DoesNotExist:
         return Response({'error': 'Category not found.'}, status=status.HTTP_404_NOT_FOUND)
     
     menu_items = MenuItem.objects.filter(
         category=category,
-        is_available=True
+        is_available=True,
+        restaurant_settings=restaurant_settings,
     ).order_by('sort_order', 'name')
     
     category_serializer = CategorySerializer(category)

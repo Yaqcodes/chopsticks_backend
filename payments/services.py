@@ -38,9 +38,14 @@ def kobo_to_naira(amount_kobo):
 class PaystackService:
     """Service class for Paystack API interactions."""
     
-    def __init__(self):
-        self.secret_key = settings.PAYSTACK_SECRET_KEY
-        self.base_url = settings.PAYSTACK_BASE_URL
+    def __init__(self, secret_key=None, public_key=None, base_url=None, webhook_secret=None):
+        # Paystack keys must be provided (business-specific from RestaurantSettings)
+        if not secret_key:
+            raise ValueError("Paystack secret key is required. Must be provided from RestaurantSettings.")
+        self.secret_key = secret_key
+        self.public_key = public_key
+        self.base_url = base_url or settings.PAYSTACK_BASE_URL
+        self.webhook_secret = webhook_secret
         self.headers = {
             'Authorization': f'Bearer {self.secret_key}',
             'Content-Type': 'application/json',
@@ -105,14 +110,16 @@ class PaystackService:
             logger.error(f"Paystack verification request failed: {str(e)}")
             raise PaystackVerificationError(f"Failed to verify transaction: {str(e)}")
     
-    def verify_webhook_signature(self, payload, signature):
+    def verify_webhook_signature(self, payload, signature, webhook_secret=None):
         """Verify webhook signature for security."""
         if not signature:
             return False
         
+        secret = webhook_secret or self.webhook_secret or self.secret_key
+
         # Create HMAC SHA-512 hash
         expected_signature = hmac.new(
-            self.secret_key.encode('utf-8'),
+            secret.encode('utf-8'),
             payload.encode('utf-8'),
             hashlib.sha512
         ).hexdigest()

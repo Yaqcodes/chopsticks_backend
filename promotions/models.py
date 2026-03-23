@@ -11,7 +11,17 @@ class PromoCode(models.Model):
         ('fixed', 'Fixed Amount'),
     ]
     
-    code = models.CharField(max_length=20, unique=True)
+    # Multi-tenant support
+    restaurant_settings = models.ForeignKey(
+        'core.RestaurantSettings',
+        on_delete=models.CASCADE,
+        related_name='promo_codes',
+        help_text="Business this promo code belongs to",
+        null=True,
+        blank=True,  # Allow null for existing data migration
+    )
+    
+    code = models.CharField(max_length=20)
     description = models.TextField()
     discount_type = models.CharField(max_length=20, choices=DISCOUNT_TYPES)
     discount_value = models.DecimalField(max_digits=10, decimal_places=2)
@@ -26,6 +36,7 @@ class PromoCode(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+        unique_together = ['restaurant_settings', 'code']
     
     def __str__(self):
         return f"{self.code} - {self.description[:50]}"

@@ -1,10 +1,9 @@
 from django.contrib import admin
-from unfold.admin import ModelAdmin as UnfoldModelAdmin
 from .models import Address
 
 
 @admin.register(Address)
-class AddressAdmin(UnfoldModelAdmin):
+class AddressAdmin(admin.ModelAdmin):
     """Admin interface for Address model."""
     
     list_display = ['user', 'full_name', 'address_type', 'city', 'state', 'is_default', 'created_at']

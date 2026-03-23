@@ -11,9 +11,15 @@ def get_default_expiration_date():
 
 
 class UserPoints(models.Model):
-    """User points balance model."""
+    """User points balance model - business-scoped."""
     
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='points')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='points')
+    restaurant_settings = models.ForeignKey(
+        'core.RestaurantSettings',
+        on_delete=models.CASCADE,
+        related_name='user_points',
+        help_text="Business this points balance belongs to"
+    )
     balance = models.PositiveIntegerField(default=0)
     total_earned = models.PositiveIntegerField(default=0)
     total_spent = models.PositiveIntegerField(default=0)
@@ -22,9 +28,14 @@ class UserPoints(models.Model):
     
     class Meta:
         verbose_name_plural = 'User Points'
+        unique_together = [('user', 'restaurant_settings')]
+        indexes = [
+            models.Index(fields=['user', 'restaurant_settings']),
+            models.Index(fields=['restaurant_settings', '-balance']),
+        ]
     
     def __str__(self):
-        return f"{self.user.email} - {self.balance} points"
+        return f"{self.user.email} - {self.restaurant_settings.name} - {self.balance} points"
     
     def add_points(self, amount, reason=''):
         """Add points to user balance."""
@@ -32,9 +43,10 @@ class UserPoints(models.Model):
         self.total_earned += amount
         self.save()
         
-        # Create transaction record
+        # Create transaction record with business context
         PointsTransaction.objects.create(
             user=self.user,
+            restaurant_settings=self.restaurant_settings,
             amount=amount,
             transaction_type='earned',
             reason=reason,
@@ -50,9 +62,10 @@ class UserPoints(models.Model):
         self.total_spent += amount
         self.save()
         
-        # Create transaction record
+        # Create transaction record with business context
         PointsTransaction.objects.create(
             user=self.user,
+            restaurant_settings=self.restaurant_settings,
             amount=amount,
             transaction_type='spent',
             reason=reason,
@@ -61,7 +74,7 @@ class UserPoints(models.Model):
 
 
 class PointsTransaction(models.Model):
-    """Points transaction history model."""
+    """Points transaction history model - business-scoped."""
     
     TRANSACTION_TYPES = [
         ('earned', 'Earned'),
@@ -75,6 +88,12 @@ class PointsTransaction(models.Model):
     ]
     
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='points_transactions')
+    restaurant_settings = models.ForeignKey(
+        'core.RestaurantSettings',
+        on_delete=models.CASCADE,
+        related_name='points_transactions',
+        help_text="Business this transaction belongs to"
+    )
     amount = models.IntegerField()
     transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
     reason = models.CharField(max_length=200, blank=True)
@@ -84,9 +103,13 @@ class PointsTransaction(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'restaurant_settings', '-created_at']),
+            models.Index(fields=['restaurant_settings', '-created_at']),
+        ]
     
     def __str__(self):
-        return f"{self.user.email} - {self.amount} points ({self.transaction_type})"
+        return f"{self.user.email} - {self.restaurant_settings.name} - {self.amount} points ({self.transaction_type})"
 
 
 class Reward(models.Model):
@@ -98,6 +121,16 @@ class Reward(models.Model):
         ('free_delivery', 'Free Delivery'),
         ('cashback', 'Cashback'),
     ]
+    
+    # Multi-tenant support
+    restaurant_settings = models.ForeignKey(
+        'core.RestaurantSettings',
+        on_delete=models.CASCADE,
+        related_name='rewards',
+        help_text="Business this reward belongs to",
+        null=True,
+        blank=True,  # Allow null for existing data migration
+    )
     
     name = models.CharField(max_length=200)
     description = models.TextField()
@@ -139,17 +172,17 @@ class Reward(models.Model):
         
         return True
     
-    def can_be_redeemed_by(self, user):
-        """Check if user can redeem this reward."""
+    def can_be_redeemed_by(self, user, restaurant_settings):
+        """Check if user can redeem this reward for a specific business."""
         try:
-            user_points = user.points
+            user_points = UserPoints.objects.get(user=user, restaurant_settings=restaurant_settings)
             return user_points.balance >= self.points_required
         except UserPoints.DoesNotExist:
             return False
 
 
 class UserReward(models.Model):
-    """User redeemed rewards model."""
+    """User redeemed rewards model - business-scoped."""
     
     STATUS_CHOICES = [
         ('active', 'Active'),
@@ -159,6 +192,12 @@ class UserReward(models.Model):
     
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='redeemed_rewards')
     reward = models.ForeignKey(Reward, on_delete=models.CASCADE)
+    restaurant_settings = models.ForeignKey(
+        'core.RestaurantSettings',
+        on_delete=models.CASCADE,
+        related_name='user_rewards',
+        help_text="Business this reward redemption belongs to"
+    )
     points_spent = models.PositiveIntegerField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     redeemed_at = models.DateTimeField(auto_now_add=True)
@@ -168,9 +207,13 @@ class UserReward(models.Model):
     
     class Meta:
         ordering = ['-redeemed_at']
+        indexes = [
+            models.Index(fields=['user', 'restaurant_settings', '-redeemed_at']),
+            models.Index(fields=['restaurant_settings', 'status']),
+        ]
     
     def __str__(self):
-        return f"{self.user.email} - {self.reward.name}"
+        return f"{self.user.email} - {self.restaurant_settings.name} - {self.reward.name}"
     
     @property
     def is_expired(self):
@@ -198,20 +241,31 @@ class UserReward(models.Model):
 
 
 class LoyaltyCard(models.Model):
-    """Loyalty card model for QR code scanning."""
+    """Loyalty card model for QR code scanning - business-scoped."""
     
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='loyalty_card', null=True, blank=True)
-    qr_code = models.CharField(max_length=255, unique=True, help_text="Customer ID number or LOYALTY- code")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='loyalty_cards', null=True, blank=True)
+    restaurant_settings = models.ForeignKey(
+        'core.RestaurantSettings',
+        on_delete=models.CASCADE,
+        related_name='loyalty_cards',
+        help_text="Business this loyalty card belongs to"
+    )
+    qr_code = models.CharField(max_length=255, help_text="Customer ID number or LOYALTY- code")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     last_scan = models.DateTimeField(null=True, blank=True)
     
     class Meta:
         verbose_name_plural = 'Loyalty Cards'
+        unique_together = [('restaurant_settings', 'qr_code')]
+        indexes = [
+            models.Index(fields=['restaurant_settings', 'qr_code']),
+            models.Index(fields=['user', 'restaurant_settings']),
+        ]
     
     def __str__(self):
         user_info = self.user.email if self.user else "Unassigned"
-        return f"Loyalty Card - {user_info} (ID: {self.qr_code})"
+        return f"Loyalty Card - {user_info} - {self.restaurant_settings.name} (ID: {self.qr_code})"
     
     def generate_qr_code(self):
         """Generate a unique QR code for this loyalty card."""
