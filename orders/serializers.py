@@ -26,11 +26,12 @@ class OrderItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='menu_item.name', read_only=True)
     item_description = serializers.CharField(source='menu_item.description', read_only=True)
     item_image = serializers.CharField(source='menu_item.image', read_only=True)
+    barcode = serializers.CharField(source='menu_item.barcode', read_only=True)
     
     class Meta:
         model = OrderItem
         fields = [
-            'id', 'menu_item', 'item_name', 'item_description', 'item_image',
+            'id', 'menu_item', 'item_name', 'barcode', 'item_description', 'item_image',
             'quantity', 'unit_price', 'total_price', 'special_instructions'
         ]
         read_only_fields = ['id', 'unit_price', 'total_price']
@@ -58,6 +59,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
             if instance.menu_item:
                 data['item_name'] = instance.menu_item.name
                 data['item_description'] = instance.menu_item.description
+                data['barcode'] = instance.menu_item.barcode or ''
                 # Safely handle image field - convert to string URL or empty string
                 if instance.menu_item.image:
                     try:
@@ -72,10 +74,12 @@ class OrderItemSerializer(serializers.ModelSerializer):
                 data['item_name'] = 'Unknown Item'
                 data['item_description'] = ''
                 data['item_image'] = ''
+                data['barcode'] = ''
         except Exception:
             data['item_name'] = 'Unknown Item'
             data['item_description'] = ''
             data['item_image'] = ''
+            data['barcode'] = ''
         
         return data
 

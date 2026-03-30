@@ -76,12 +76,10 @@ class OrderListView(generics.ListAPIView):
 
 class OrderDetailView(generics.RetrieveAPIView):
     """Get detailed information about a specific order."""
-    
     permission_classes = [IsAuthenticated]
     serializer_class = OrderDetailSerializer
-    
+
     def get_queryset(self):
-        # Handle Swagger schema generation
         if getattr(self, 'swagger_fake_view', False):
             return Order.objects.none()
         restaurant_settings = get_business_from_request(self.request)
@@ -89,6 +87,15 @@ class OrderDetailView(generics.RetrieveAPIView):
             user=self.request.user,
             restaurant_settings=restaurant_settings,
         )
+
+    def get_object(self):
+        queryset = self.get_queryset()
+        if 'pk' in self.kwargs:
+            obj = get_object_or_404(queryset, pk=self.kwargs['pk'])
+        else:
+            obj = get_object_or_404(queryset, order_number=self.kwargs['order_number'])
+        self.check_object_permissions(self.request, obj)
+        return obj
 
 
 class AdminOrderListView(generics.ListAPIView):
@@ -138,26 +145,25 @@ class AdminOrderListView(generics.ListAPIView):
 
 class AdminOrderDetailView(generics.RetrieveAPIView):
     """Admin view to get detailed information about any specific order."""
-    
     permission_classes = [IsAdminUser]
     serializer_class = OrderDetailSerializer
-    
+
     def get_queryset(self):
-        # Handle Swagger schema generation
         if getattr(self, 'swagger_fake_view', False):
             return Order.objects.none()
-        
-        # Check if user is staff
         if not self.request.user.is_staff:
             return Order.objects.none()
-            
         restaurant_settings = get_business_from_request(self.request)
-        
-        # Return all orders for this specific business instance. 
-        # The URL parameter (pk/id) will automatically pick the specific order from this queryset.
-        return Order.objects.filter(
-            restaurant_settings=restaurant_settings,
-        )
+        return Order.objects.filter(restaurant_settings=restaurant_settings)
+
+    def get_object(self):
+        queryset = self.get_queryset()
+        if 'pk' in self.kwargs:
+            obj = get_object_or_404(queryset, pk=self.kwargs['pk'])
+        else:
+            obj = get_object_or_404(queryset, order_number=self.kwargs['order_number'])
+        self.check_object_permissions(self.request, obj)
+        return obj
 
 
 @api_view(['POST'])

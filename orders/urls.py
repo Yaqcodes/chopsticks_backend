@@ -9,7 +9,9 @@ urlpatterns = [
     path('admin/', views.AdminOrderListView.as_view(), name='admin_order_list'),
     path('create/', views.create_order, name='create_order'),
     path('<int:pk>/', views.OrderDetailView.as_view(), name='order_detail'),
+    path('<str:order_number>/', views.OrderDetailView.as_view(), name='order_detail_order_number'),
     path('admin/<int:pk>/', views.AdminOrderDetailView.as_view(), name='order_detail'),
+    path('admin/<str:order_number>/', views.AdminOrderDetailView.as_view(), name='order_detail_order_number'),
     path('<int:order_id>/cancel/', views.cancel_order, name='cancel_order'),
     
     # Order tracking
