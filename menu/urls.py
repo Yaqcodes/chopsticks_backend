@@ -28,5 +28,7 @@ urlpatterns = [
     # MenuItem mutations
     path('items/create/', views.MenuItemCreateView.as_view(), name='menuitem-create'),
     path('items/<int:pk>/update/', views.MenuItemUpdateView.as_view(), name='menuitem-update'),
+    path('items/<str:barcode>/update/', views.MenuItemUpdateView.as_view(), name='menuitem-update'),
     path('items/<int:pk>/delete/', views.MenuItemDeleteView.as_view(), name='menuitem-delete'),
+    path('items/<str:barcode>/delete/', views.MenuItemDeleteView.as_view(), name='menuitem-delete'),
 ]

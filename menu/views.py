@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import connection
 from django.db.models import Q, Case, When
+from django.shortcuts import get_object_or_404
 from rest_framework.permissions import IsAdminUser  # or your custom permission
 from .serializers import CategoryWriteSerializer, MenuItemWriteSerializer
 
@@ -313,13 +314,21 @@ class MenuItemCreateView(generics.CreateAPIView):
 
 
 class MenuItemUpdateView(generics.UpdateAPIView):
-    """PUT/PATCH /api/menu/items/{id}/update/"""
     serializer_class = MenuItemWriteSerializer
     permission_classes = [IsAdminUser]
 
     def get_queryset(self):
         restaurant_settings = get_business_from_request(self.request)
         return MenuItem.objects.filter(restaurant_settings=restaurant_settings)
+
+    def get_object(self):
+        queryset = self.get_queryset()
+        if 'pk' in self.kwargs:
+            obj = get_object_or_404(queryset, pk=self.kwargs['pk'])
+        else:
+            obj = get_object_or_404(queryset, barcode=self.kwargs['barcode'])
+        self.check_object_permissions(self.request, obj)
+        return obj
 
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
@@ -328,9 +337,17 @@ class MenuItemUpdateView(generics.UpdateAPIView):
 
 
 class MenuItemDeleteView(generics.DestroyAPIView):
-    """DELETE /api/menu/items/{id}/delete/"""
     permission_classes = [IsAdminUser]
 
     def get_queryset(self):
         restaurant_settings = get_business_from_request(self.request)
         return MenuItem.objects.filter(restaurant_settings=restaurant_settings)
+
+    def get_object(self):
+        queryset = self.get_queryset()
+        if 'pk' in self.kwargs:
+            obj = get_object_or_404(queryset, pk=self.kwargs['pk'])
+        else:
+            obj = get_object_or_404(queryset, barcode=self.kwargs['barcode'])
+        self.check_object_permissions(self.request, obj)
+        return obj
