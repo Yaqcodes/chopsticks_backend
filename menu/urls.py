@@ -19,4 +19,14 @@ urlpatterns = [
     # Search
     path('search/', views.menu_search, name='menu_search'),
     path('barcode/<str:barcode>/', views.menu_item_by_barcode, name='menu-by-barcode'),
+
+    # Category mutations
+    path('menu/categories/create/', views.CategoryCreateView.as_view(), name='category-create'),
+    path('menu/categories/<int:pk>/update/', views.CategoryUpdateView.as_view(), name='category-update'),
+    path('menu/categories/<int:pk>/delete/', views.CategoryDeleteView.as_view(), name='category-delete'),
+
+    # MenuItem mutations
+    path('menu/items/create/', views.MenuItemCreateView.as_view(), name='menuitem-create'),
+    path('menu/items/<int:pk>/update/', views.MenuItemUpdateView.as_view(), name='menuitem-update'),
+    path('menu/items/<int:pk>/delete/', views.MenuItemDeleteView.as_view(), name='menuitem-delete'),
 ]

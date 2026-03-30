@@ -5,6 +5,8 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import connection
 from django.db.models import Q, Case, When
+from rest_framework.permissions import IsAdminUser  # or your custom permission
+from .serializers import CategoryWriteSerializer, MenuItemWriteSerializer
 
 from core.utils import get_business_from_request
 from .models import Category, MenuItem
@@ -254,3 +256,81 @@ def menu_item_by_barcode(request, barcode):
     serializer = MenuItemDetailSerializer(menu_item)
     
     return Response(serializer.data)
+
+
+# --- Category Mutation Views ---
+
+class CategoryCreateView(generics.CreateAPIView):
+    """POST /api/menu/categories/create/"""
+    serializer_class = CategoryWriteSerializer
+    permission_classes = [IsAdminUser]  # replace with your permission
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx['restaurant_settings'] = get_business_from_request(self.request)
+        return ctx
+
+
+class CategoryUpdateView(generics.UpdateAPIView):
+    """PUT/PATCH /api/menu/categories/{id}/update/"""
+    serializer_class = CategoryWriteSerializer
+    permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        restaurant_settings = get_business_from_request(self.request)
+        return Category.objects.filter(restaurant_settings=restaurant_settings)
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx['restaurant_settings'] = get_business_from_request(self.request)
+        return ctx
+
+
+class CategoryDeleteView(generics.DestroyAPIView):
+    """DELETE /api/menu/categories/{id}/delete/"""
+    permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        restaurant_settings = get_business_from_request(self.request)
+        return Category.objects.filter(restaurant_settings=restaurant_settings)
+
+
+# --- MenuItem Mutation Views ---
+
+class MenuItemCreateView(generics.CreateAPIView):
+    """POST /api/menu/items/create/"""
+    serializer_class = MenuItemWriteSerializer
+    permission_classes = [IsAdminUser]
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx['restaurant_settings'] = get_business_from_request(self.request)
+        return ctx
+
+    def perform_create(self, serializer):
+        restaurant_settings = get_business_from_request(self.request)
+        serializer.save(restaurant_settings=restaurant_settings)
+
+
+class MenuItemUpdateView(generics.UpdateAPIView):
+    """PUT/PATCH /api/menu/items/{id}/update/"""
+    serializer_class = MenuItemWriteSerializer
+    permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        restaurant_settings = get_business_from_request(self.request)
+        return MenuItem.objects.filter(restaurant_settings=restaurant_settings)
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx['restaurant_settings'] = get_business_from_request(self.request)
+        return ctx
+
+
+class MenuItemDeleteView(generics.DestroyAPIView):
+    """DELETE /api/menu/items/{id}/delete/"""
+    permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        restaurant_settings = get_business_from_request(self.request)
+        return MenuItem.objects.filter(restaurant_settings=restaurant_settings)

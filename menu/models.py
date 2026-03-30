@@ -73,7 +73,7 @@ class MenuItem(models.Model):
         on_delete=models.CASCADE,
         related_name='menu_items',
     )
-    image = models.ImageField(upload_to='menu_items/', blank=False, null=True)
+    image = models.ImageField(upload_to='menu_items/', blank=True, null=True)
     badges = models.JSONField(default=list, blank=True)  # Store badge types as list
     allergens = models.JSONField(default=list, blank=True)  # Store allergen list
     nutritional_info = models.JSONField(default=dict, blank=True)  # Store nutritional data

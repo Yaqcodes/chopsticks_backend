@@ -177,3 +177,42 @@ class MenuSearchSerializer(serializers.ModelSerializer):
     def get_badges_display(self, obj):
         """Get badge display names."""
         return obj.get_badges_display()
+
+class CategoryWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ['name', 'description', 'image', 'is_active', 'sort_order']
+
+    def create(self, validated_data):
+        # slug is auto-generated like in ZmallCategoryAdmin.save_model
+        from django.utils.text import slugify
+        restaurant_settings = self.context['restaurant_settings']
+        obj = Category(**validated_data, restaurant_settings=restaurant_settings)
+        base = slugify(obj.name)[:100] or 'category'
+        candidate = base
+        n = 0
+        while Category.objects.filter(restaurant_settings=restaurant_settings, slug=candidate).exists():
+            n += 1
+            suffix = f'-{n}'
+            candidate = f'{base[:100 - len(suffix)]}{suffix}'
+        obj.slug = candidate
+        obj.save()
+        return obj
+
+
+class MenuItemWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MenuItem
+        fields = [
+            'name', 'description', 'size', 'sizes', 'sku', 'barcode',
+            'price', 'category', 'image', 'badges', 'allergens',
+            'nutritional_info', 'is_available', 'is_featured',
+            'preparation_time', 'sort_order', 'gender', 'colors',
+        ]
+
+    def validate_category(self, value):
+        # Ensure the category belongs to the same business
+        restaurant_settings = self.context['restaurant_settings']
+        if value.restaurant_settings != restaurant_settings:
+            raise serializers.ValidationError("Category does not belong to this business.")
+        return value
