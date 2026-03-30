@@ -94,7 +94,7 @@ class OrderDetailView(generics.RetrieveAPIView):
 class AdminOrderListView(generics.ListAPIView):
     """Admin view to list all orders with filtering capabilities."""
     
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAdminUser]
     serializer_class = OrderListSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['status', 'payment_status', 'delivery_type']
@@ -139,7 +139,7 @@ class AdminOrderListView(generics.ListAPIView):
 class AdminOrderDetailView(generics.RetrieveAPIView):
     """Admin view to get detailed information about any specific order."""
     
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAdminUser]
     serializer_class = OrderDetailSerializer
     
     def get_queryset(self):
