@@ -135,16 +135,16 @@ class MenuItemForm(forms.ModelForm):
 class MenuItemAdmin(admin.ModelAdmin):
     """Admin interface for MenuItem model."""
     form = MenuItemForm
-    list_display = ['name', 'category', 'size', 'sku', 'restaurant_settings', 'price', 'is_available', 'is_featured', 'sort_order']
+    list_display = ['name', 'category', 'size', 'sku', 'barcode', 'restaurant_settings', 'price', 'is_available', 'is_featured', 'sort_order']
     list_filter = ['restaurant_settings', 'category', 'is_available', 'is_featured', 'badges', 'created_at']
-    search_fields = ['name', 'description', 'size', 'category__name']
+    search_fields = ['name', 'description', 'size', 'category__name', 'barcode']
     ordering = ['category', 'sort_order', 'name']
     list_editable = ['is_available', 'is_featured', 'sort_order']
     filter_horizontal = []
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('name', 'description', 'size', 'sku', 'category', 'restaurant_settings', 'price', 'image')
+            'fields': ('name', 'description', 'size', 'sku', 'barcode', 'category', 'restaurant_settings', 'price', 'image')
         }),
         ('Status & Display', {
             'fields': ('is_available', 'is_featured', 'sort_order', 'preparation_time')
@@ -360,7 +360,7 @@ class ZmallMenuItemForm(forms.ModelForm):
     class Meta:
         model = MenuItem
         fields = [
-            'name', 'description', 'category', 'price', 'image',
+            'name', 'description', 'category', 'price', 'image', 'barcode',
             'gender', 'size_clothing', 'size_shoes', 'colors', 'sku', 'is_available', 'is_featured',
             'badge_choices',
         ]
@@ -457,15 +457,15 @@ class ZmallMenuItemAdmin(BusinessAdminMixin, ModelAdmin):
 
     class Media:
         js = ('menu/js/zmall_sizes.js',)
-    list_display = ['name', 'category', 'gender', 'price_display', 'is_available', 'badges_display', 'sku']
+    list_display = ['name', 'category', 'gender', 'price_display', 'is_available', 'badges_display', 'sku', 'barcode']
     list_filter = [ZmallCategoryListFilter, 'gender', ZmallBadgeListFilter, 'is_available', 'is_featured']
-    search_fields = ['name', 'description', 'category__name']
+    search_fields = ['name', 'description', 'category__name', 'barcode']
     ordering = ['category', '-created_at', 'name']
     list_editable = ['is_available', 'sku']
     
     fieldsets = (
         ('Product', {
-            'fields': ('name', 'description', 'category', 'price', 'image'),
+            'fields': ('name', 'description', 'category', 'price', 'image', 'barcode'),
             'description': 'Product details.',
         }),
         ('Apparel', {

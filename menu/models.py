@@ -89,6 +89,15 @@ class MenuItem(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Product unique identifier
+    barcode = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True,
+        unique=True,
+        help_text="Product barcode (UPC, EAN, or custom QR string)."
+    )
+
     # Apparel-only fields (used by ZMall; leave blank for food tenants)
     gender = models.CharField(
         max_length=20,

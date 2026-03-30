@@ -66,7 +66,7 @@ class MenuItemListView(generics.ListAPIView):
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['category', 'is_featured']
-    search_fields = ['name', 'description']
+    search_fields = ['name', 'description', 'barcode']
     ordering_fields = ['name', 'price', 'sort_order']
     ordering = ['category', 'sort_order', 'name']
     
@@ -164,13 +164,14 @@ def menu_search(request):
     if not query:
         return Response({'error': 'Search query is required.'}, status=status.HTTP_400_BAD_REQUEST)
     
-    # Search in name, description, and category name
+    # Search in name, description, category name, and barcode
     queryset = MenuItem.objects.filter(
         Q(is_available=True) &
         Q(restaurant_settings=restaurant_settings) &
         (Q(name__icontains=query) | 
          Q(description__icontains=query) | 
-         Q(category__name__icontains=query))
+         Q(category__name__icontains=query) |
+         Q(barcode__icontains=query)) # Added barcode search
     ).distinct()
     
     # Apply additional filters if provided
@@ -228,3 +229,28 @@ def menu_by_category(request, category_id):
         'menu_items': menu_serializer.data,
         'count': menu_items.count()
     })
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def menu_item_by_barcode(request, barcode):
+    """Fetch a single menu item by its exact barcode."""
+    
+    restaurant_settings = get_business_from_request(request)
+    
+    try:
+        # We use .get() because barcodes should be unique per item
+        menu_item = MenuItem.objects.get(
+            barcode=barcode,
+            is_available=True,
+            restaurant_settings=restaurant_settings
+        )
+    except MenuItem.DoesNotExist:
+        return Response(
+            {'error': 'No product found with this barcode.'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Use the detail serializer to provide the full picture (images, etc.)
+    serializer = MenuItemDetailSerializer(menu_item)
+    
+    return Response(serializer.data)

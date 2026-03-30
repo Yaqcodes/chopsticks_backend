@@ -18,4 +18,5 @@ urlpatterns = [
     
     # Search
     path('search/', views.menu_search, name='menu_search'),
+    path('barcode/<str:barcode>/', views.menu_item_by_barcode, name='menu-by-barcode'),
 ]

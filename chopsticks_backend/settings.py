@@ -38,6 +38,7 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,chopsticks-
 
 # Application definition
 INSTALLED_APPS = [
+    'drf_spectacular',
     'unfold',  # Unfold must be before django.contrib.admin
     'unfold.contrib.filters',  # Optional: Advanced filters
     'django.contrib.admin',
@@ -199,6 +200,7 @@ if not DEBUG:
 
 # REST Framework settings
 REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
