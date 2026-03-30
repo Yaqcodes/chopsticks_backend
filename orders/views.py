@@ -1,7 +1,7 @@
 import logging
 from rest_framework import generics, status, filters
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, IsAdmin, AllowAny
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.db import transaction
@@ -94,7 +94,7 @@ class OrderDetailView(generics.RetrieveAPIView):
 class AdminOrderListView(generics.ListAPIView):
     """Admin view to list all orders with filtering capabilities."""
     
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdmin]
     serializer_class = OrderListSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['status', 'payment_status', 'delivery_type']
@@ -134,6 +134,30 @@ class AdminOrderListView(generics.ListAPIView):
                 pass
         
         return queryset
+
+
+class AdminOrderDetailView(generics.RetrieveAPIView):
+    """Admin view to get detailed information about any specific order."""
+    
+    permission_classes = [IsAdmin]
+    serializer_class = OrderDetailSerializer
+    
+    def get_queryset(self):
+        # Handle Swagger schema generation
+        if getattr(self, 'swagger_fake_view', False):
+            return Order.objects.none()
+        
+        # Check if user is staff
+        if not self.request.user.is_staff:
+            return Order.objects.none()
+            
+        restaurant_settings = get_business_from_request(self.request)
+        
+        # Return all orders for this specific business instance. 
+        # The URL parameter (pk/id) will automatically pick the specific order from this queryset.
+        return Order.objects.filter(
+            restaurant_settings=restaurant_settings,
+        )
 
 
 @api_view(['POST'])
