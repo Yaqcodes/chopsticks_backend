@@ -9,7 +9,8 @@ urlpatterns = [
     path('categories/<int:pk>/', views.CategoryDetailView.as_view(), name='category_detail'),
     path('categories/<int:category_id>/items/', views.menu_by_category, name='menu_by_category'),
     
-    # Menu item endpoints
+    # Menu item endpoints (filter-options before <int:pk> so it is not captured as an id)
+    path('items/filter-options/', views.menu_item_filter_options, name='menu_item_filter_options'),
     path('items/', views.MenuItemListView.as_view(), name='menu_item_list'),
     path('items/<int:pk>/', views.MenuItemDetailView.as_view(), name='menu_item_detail'),
     

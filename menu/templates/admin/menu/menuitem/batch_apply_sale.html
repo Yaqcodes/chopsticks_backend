@@ -1,0 +1,42 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}{{ block.super }}
+<link rel="stylesheet" href="{% static 'menu/css/zmall_admin_form.css' %}">
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{{ admin_index_url }}">{% trans 'Home' %}</a>
+  &rsaquo; <a href="{{ changelist_url }}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {% trans 'Apply sale discount' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="zmall-batch-sale">
+<h1>{% trans 'Apply sale discount' %}</h1>
+<p>{% blocktrans count counter=queryset.count %}
+This will update <strong>{{ counter }}</strong> product.
+{% plural %}
+This will update <strong>{{ counter }}</strong> products.
+{% endblocktrans %}</p>
+<p>{% trans 'Sale price is list price × (1 − %/100), rounded to 2 decimal places. Maximum 90%. Existing sale prices are overwritten.' %}</p>
+
+<form method="post">
+  {% csrf_token %}
+  <fieldset class="module aligned">
+    <div class="form-row">
+      <div class="zmall-batch-sale__field">
+        <label for="id_discount_percent" class="zmall-batch-sale__label">{% trans 'Discount %' %}</label>
+        <input type="number" name="discount_percent" id="id_discount_percent" step="0.01" min="0.01" max="90" required class="{{ zmall_batch_discount_input_class }}">
+      </div>
+    </div>
+  </fieldset>
+  <div class="submit-row zmall-batch-sale__actions">
+    <input type="submit" value="{% trans 'Apply' %}" class="{{ zmall_batch_submit_class }}">
+    <a href="{{ changelist_url }}" class="{{ zmall_batch_cancel_class }}">{% trans 'Cancel' %}</a>
+  </div>
+</form>
+</div>
+{% endblock %}

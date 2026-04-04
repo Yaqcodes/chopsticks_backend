@@ -347,7 +347,7 @@ def calculate_cart_totals_view(request):
         cart_items_with_prices.append({
             "menu_item_id": item['menu_item_id'],
             "quantity": item['quantity'],
-            "price": menu_item.price  # add the price here
+            "price": menu_item.get_effective_price(),
         })
     
     # Get UserReward if provided

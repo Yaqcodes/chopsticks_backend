@@ -1,10 +1,22 @@
+import re
+from decimal import Decimal, ROUND_HALF_UP
+
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
 from django.db import connection
 from django.db.models import Max
+from django.http import HttpResponseRedirect
+from django.template.response import TemplateResponse
+from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.text import slugify
 from unfold.admin import ModelAdmin
+from unfold.widgets import (
+    UnfoldAdminDecimalFieldWidget,
+    UnfoldAdminTextareaWidget,
+    UnfoldBooleanWidget,
+)
 from .models import Category, MenuItem, MenuItemImage
 from core.admin_sites import roschi_admin_site, chopsticks_admin_site, zmall_admin_site
 from core.main_admin_site import main_admin_site
@@ -144,7 +156,7 @@ class MenuItemAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('name', 'description', 'size', 'sku', 'barcode', 'category', 'restaurant_settings', 'price', 'image')
+            'fields': ('name', 'description', 'size', 'sku', 'barcode', 'category', 'restaurant_settings', 'price', 'on_sale', 'sale_price', 'image')
         }),
         ('Status & Display', {
             'fields': ('is_available', 'is_featured', 'sort_order', 'preparation_time')
@@ -217,7 +229,7 @@ class RoschiMenuItemAdmin(BusinessAdminMixin, ModelAdmin):
     
     fieldsets = (
         ('Product Details', {
-            'fields': ('name', 'description', 'category', 'size', 'price', 'image'),
+            'fields': ('name', 'description', 'category', 'size', 'price', 'on_sale', 'sale_price', 'image'),
             'description': 'What customers will see when browsing your products'
         }),
         ('Stock Management', {
@@ -332,6 +344,44 @@ from .widgets import (
     ShoeSizeWidget,
 )
 
+ZMALL_SIZES_MAX = 32
+ZMALL_BATCH_SALE_SESSION_KEY = 'menu_zmall_batch_sale_ids'
+
+
+def _zmall_batch_sale_widget_classes():
+    """Classes for standalone batch-sale template; inputs use Unfold, buttons use neutral zmall styles."""
+    try:
+        from unfold.widgets import INPUT_CLASSES
+
+        return {
+            'discount_input': ' '.join(INPUT_CLASSES),
+            'submit': 'zmall-widget-btn zmall-widget-btn--primary',
+            'cancel': 'zmall-widget-btn zmall-widget-btn--secondary',
+        }
+    except ImportError:
+        return {
+            'discount_input': 'zmall-admin-input',
+            'submit': 'zmall-widget-btn zmall-widget-btn--primary',
+            'cancel': 'zmall-widget-btn zmall-widget-btn--secondary',
+        }
+
+
+def _parse_sizes_extra(text):
+    if not text or not str(text).strip():
+        return []
+    parts = re.split(r'[\n,]+', str(text))
+    return [p.strip() for p in parts if p.strip()]
+
+
+def _dedupe_sizes_preserve_order(items):
+    seen = set()
+    out = []
+    for x in items:
+        if x not in seen:
+            seen.add(x)
+            out.append(x)
+    return out
+
 
 class ZmallMenuItemForm(forms.ModelForm):
     """Form for ZMall products: badges, sizes (by category), colors (picker), multiple images."""
@@ -348,21 +398,42 @@ class ZmallMenuItemForm(forms.ModelForm):
         choices=CLOTHING_SIZE_CHOICES,
         required=False,
         widget=ClothingSizeWidget(),
-        help_text='XS–XXL, ONE SIZE. Shown when category is not Shoes.',
+        help_text='XXS–XXXL, ONE SIZE. Shown when category is not Shoes.',
     )
     size_shoes = forms.MultipleChoiceField(
-        label='Sizes (shoes)',
+        label='Sizes (shoes [EU])',
         choices=SHOE_SIZE_CHOICES,
         required=False,
         widget=ShoeSizeWidget(),
-        help_text='Shown only when category is Shoes.',
+        help_text='EU shoe sizes. Shown only when category is Shoes.',
     )
+    sizes_extra = forms.CharField(
+        label='Additional sizes',
+        required=False,
+        widget=UnfoldAdminTextareaWidget(attrs={'rows': 4}),
+        help_text=(
+            'Use this when a size is not available as a checkbox above. '
+            'Type each extra size on its own line, or put several on one line separated by commas—whichever is easier for you. '
+            'Examples: 49, 34 EU, 50ml, One size fits all. '
+            'Extra spaces are cleaned up automatically, and empty lines are skipped. '
+            'Including what you tick above, you can save up to 32 sizes for this product.'
+        ),
+    )
+    discount_percent_calculator = forms.DecimalField(
+        label='Discount % (calculator)',
+        required=False,
+        max_digits=5,
+        decimal_places=2,
+        widget=UnfoldAdminDecimalFieldWidget(),
+        help_text='Optional. Enter 0–90 to set sale_price from list price (2 decimal places). Not stored; overwrites sale fields when saved.',
+    )
+
     class Meta:
         model = MenuItem
         fields = [
-            'name', 'description', 'category', 'price', 'image', 'barcode',
-            'gender', 'size_clothing', 'size_shoes', 'colors', 'sku', 'is_available', 'is_featured',
-            'badge_choices',
+            'name', 'description', 'category', 'price', 'on_sale', 'sale_price', 'image', 'barcode',
+            'gender', 'size_clothing', 'size_shoes', 'sizes_extra', 'colors', 'sku', 'is_available', 'is_featured',
+            'badge_choices', 'discount_percent_calculator',
         ]
     
     def __init__(self, *args, **kwargs):
@@ -371,24 +442,89 @@ class ZmallMenuItemForm(forms.ModelForm):
         self.fields['size_clothing'].choices = CLOTHING_SIZE_CHOICES
         self.fields['size_shoes'].choices = SHOE_SIZE_CHOICES
         self.fields['colors'].widget = ColorPickerWidget()
+        self.fields['sale_price'].widget = UnfoldAdminDecimalFieldWidget()
+        self.fields['on_sale'].widget = UnfoldBooleanWidget()
         self.fields['colors'].help_text = 'Add colours with optional names. Pick any shade; if name is empty, hex is shown on the store.'
         if self.instance and self.instance.pk:
             self.fields['image'].required = False
             if self.instance.badges:
                 allowed = {c[0] for c in MenuItem.BADGE_CHOICES_ZMALL}
                 self.fields['badge_choices'].initial = [b for b in self.instance.badges if b in allowed]
+            shoe_vals = {c[0] for c in SHOE_SIZE_CHOICES}
+            clothing_vals = {c[0] for c in CLOTHING_SIZE_CHOICES}
+            cat = self.instance.category
+            is_shoes = cat and getattr(cat, 'slug', None) == 'shoes'
+            clothing_init = []
+            shoe_init = []
+            extras = []
             if self.instance.sizes:
-                shoe_vals = {c[0] for c in SHOE_SIZE_CHOICES}
-                clothing_vals = {c[0] for c in CLOTHING_SIZE_CHOICES}
-                self.fields['size_clothing'].initial = [s for s in self.instance.sizes if s in clothing_vals]
-                self.fields['size_shoes'].initial = [s for s in self.instance.sizes if s in shoe_vals]
+                for s in self.instance.sizes:
+                    ss = str(s).strip()
+                    if not ss:
+                        continue
+                    in_shoe = ss in shoe_vals
+                    in_cloth = ss in clothing_vals
+                    if is_shoes:
+                        if in_shoe:
+                            shoe_init.append(ss)
+                        elif in_cloth:
+                            clothing_init.append(ss)
+                        else:
+                            extras.append(ss)
+                    else:
+                        if in_cloth:
+                            clothing_init.append(ss)
+                        elif in_shoe:
+                            shoe_init.append(ss)
+                        else:
+                            extras.append(ss)
+            self.fields['size_clothing'].initial = clothing_init
+            self.fields['size_shoes'].initial = shoe_init
+            self.fields['sizes_extra'].initial = '\n'.join(extras)
+    
+    def clean(self):
+        cleaned = super().clean()
+        pct = cleaned.get('discount_percent_calculator')
+        if pct is not None and pct != '':
+            try:
+                p = Decimal(str(pct))
+            except Exception:
+                raise ValidationError({'discount_percent_calculator': 'Enter a valid percentage.'})
+            if p <= 0 or p > 90:
+                raise ValidationError(
+                    {'discount_percent_calculator': 'Enter a percentage between 0.01 and 90, or leave blank.'}
+                )
+            price = cleaned.get('price')
+            if price is None and self.instance and self.instance.pk:
+                price = self.instance.price
+            if price is None:
+                raise ValidationError({'discount_percent_calculator': 'Set list price before using the calculator.'})
+            factor = (Decimal('100') - p) / Decimal('100')
+            sale = (price * factor).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            cleaned['sale_price'] = sale
+            cleaned['on_sale'] = True
+
+        category = cleaned.get('category')
+        is_shoes = category and getattr(category, 'slug', None) == 'shoes'
+        preset = list(cleaned.get('size_shoes' if is_shoes else 'size_clothing') or [])
+        extras = _parse_sizes_extra(cleaned.get('sizes_extra', ''))
+        merged = _dedupe_sizes_preserve_order(preset + extras)
+        if len(merged) > ZMALL_SIZES_MAX:
+            raise ValidationError(
+                {
+                    'sizes_extra': (
+                        f'This product allows at most {ZMALL_SIZES_MAX} sizes in total, including sizes ticked above. '
+                        'Remove some lines here or untick a few checkboxes.'
+                    )
+                }
+            )
+        cleaned['_merged_sizes'] = merged
+        return cleaned
     
     def save(self, commit=True):
         obj = super().save(commit=False)
         obj.badges = self.cleaned_data.get('badge_choices', [])
-        category = self.cleaned_data.get('category')
-        is_shoes = category and getattr(category, 'slug', None) == 'shoes'
-        obj.sizes = self.cleaned_data.get('size_shoes', []) if is_shoes else self.cleaned_data.get('size_clothing', [])
+        obj.sizes = self.cleaned_data.get('_merged_sizes', [])
         if commit:
             obj.save()
         return obj
@@ -454,11 +590,17 @@ class ZmallMenuItemAdmin(BusinessAdminMixin, ModelAdmin):
     form = ZmallMenuItemForm
     inlines = [MenuItemImageInline]
     change_form_template = 'admin/menu/menuitem/zmall_menuitem_change_form.html'
+    actions = [
+        'action_apply_sale_discount',
+        'action_batch_remove_sale',
+        'action_clear_sale',
+    ]
 
     class Media:
         js = ('menu/js/zmall_sizes.js',)
+        css = {'all': ('menu/css/zmall_admin_form.css',)}
     list_display = ['name', 'category', 'gender', 'price_display', 'is_available', 'badges_display', 'sku', 'barcode']
-    list_filter = [ZmallCategoryListFilter, 'gender', ZmallBadgeListFilter, 'is_available', 'is_featured']
+    list_filter = [ZmallCategoryListFilter, 'gender', ZmallBadgeListFilter, 'is_available', 'is_featured', 'on_sale']
     search_fields = ['name', 'description', 'category__name', 'barcode']
     ordering = ['category', '-created_at', 'name']
     list_editable = ['is_available', 'sku']
@@ -468,9 +610,13 @@ class ZmallMenuItemAdmin(BusinessAdminMixin, ModelAdmin):
             'fields': ('name', 'description', 'category', 'price', 'image', 'barcode'),
             'description': 'Product details.',
         }),
+        ('Sale', {
+            'fields': ('on_sale', 'sale_price', 'discount_percent_calculator'),
+            'description': 'List price is in Product. Optional calculator sets sale from % (max 90); not stored.',
+        }),
         ('Apparel', {
-            'fields': ('gender', 'size_clothing', 'size_shoes', 'colors'),
-            'description': 'Gender, sizes (checkboxes), and colours (picker; name optional, hex used when empty).',
+            'fields': ('gender', 'size_clothing', 'size_shoes', 'sizes_extra', 'colors'),
+            'description': 'Gender, tick the standard sizes that apply, add any other sizes in the box below (EU for shoes when this category is Shoes), then set colours.',
         }),
         ('Status', {
             'fields': ('is_available', 'is_featured', 'sku'),
@@ -480,6 +626,110 @@ class ZmallMenuItemAdmin(BusinessAdminMixin, ModelAdmin):
             'description': 'Bestseller and Sale only.',
         }),
     )
+
+    def get_urls(self):
+        urls = super().get_urls()
+        info = self.model._meta.app_label, self.model._meta.model_name
+        custom = [
+            path(
+                'batch-apply-sale/',
+                self.admin_site.admin_view(self.batch_apply_sale_view),
+                name='%s_%s_batch_apply_sale' % info,
+            ),
+        ]
+        return custom + urls
+
+    def action_apply_sale_discount(self, request, queryset):
+        ids = list(queryset.values_list('pk', flat=True))
+        if not ids:
+            self.message_user(request, 'No products selected.', level=messages.WARNING)
+            return
+        request.session[ZMALL_BATCH_SALE_SESSION_KEY] = ids
+        opts = self.model._meta
+        url = reverse(
+            '%s:%s_%s_batch_apply_sale'
+            % (self.admin_site.name, opts.app_label, opts.model_name),
+        )
+        return HttpResponseRedirect(url)
+
+    action_apply_sale_discount.short_description = 'Apply sale discount %%…'
+
+    def action_batch_remove_sale(self, request, queryset):
+        n = queryset.update(on_sale=False)
+        self.message_user(request, f'Set on_sale=false for {n} product(s).', level=messages.SUCCESS)
+
+    action_batch_remove_sale.short_description = 'Take off sale (on_sale only)'
+
+    def action_clear_sale(self, request, queryset):
+        n = queryset.update(on_sale=False, sale_price=None)
+        self.message_user(request, f'Cleared sale on {n} product(s).', level=messages.SUCCESS)
+
+    action_clear_sale.short_description = 'Clear sale (off + wipe sale price)'
+
+    def batch_apply_sale_view(self, request):
+        session_key = ZMALL_BATCH_SALE_SESSION_KEY
+        raw_ids = request.session.get(session_key)
+        if not raw_ids:
+            messages.warning(request, 'No products in batch. Select items and choose “Apply sale discount %” again.')
+            return HttpResponseRedirect(self._changelist_url())
+
+        qs = self.model.objects.filter(pk__in=raw_ids)
+        business_settings = self._get_business_settings()
+        if business_settings:
+            qs = qs.filter(restaurant_settings=business_settings)
+        valid_ids = set(qs.values_list('pk', flat=True))
+        if valid_ids != set(raw_ids):
+            del request.session[session_key]
+            messages.error(request, 'Invalid or expired selection.')
+            return HttpResponseRedirect(self._changelist_url())
+
+        if request.method == 'POST':
+            pct_raw = (request.POST.get('discount_percent') or '').strip()
+            try:
+                pct = Decimal(pct_raw)
+            except Exception:
+                messages.error(request, 'Enter a valid percentage.')
+                context = self._batch_sale_context(request, qs)
+                return TemplateResponse(request, 'admin/menu/menuitem/batch_apply_sale.html', context)
+            if pct <= 0 or pct > 90:
+                messages.error(request, 'Discount must be between 0.01 and 90%.')
+                context = self._batch_sale_context(request, qs)
+                return TemplateResponse(request, 'admin/menu/menuitem/batch_apply_sale.html', context)
+            factor = (Decimal('100') - pct) / Decimal('100')
+            for obj in qs:
+                obj.sale_price = (obj.price * factor).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                obj.on_sale = True
+                obj.save(update_fields=['sale_price', 'on_sale'])
+            del request.session[session_key]
+            messages.success(request, f'Applied {pct}% sale to {qs.count()} product(s).')
+            return HttpResponseRedirect(self._changelist_url())
+
+        context = self._batch_sale_context(request, qs)
+        return TemplateResponse(request, 'admin/menu/menuitem/batch_apply_sale.html', context)
+
+    def _changelist_url(self):
+        opts = self.model._meta
+        return reverse(
+            '%s:%s_%s_changelist'
+            % (self.admin_site.name, opts.app_label, opts.model_name),
+        )
+
+    def _batch_sale_context(self, request, queryset):
+        opts = self.model._meta
+        site = self.admin_site.name
+        wc = _zmall_batch_sale_widget_classes()
+        return {
+            **self.admin_site.each_context(request),
+            'title': 'Apply sale discount',
+            'opts': opts,
+            'queryset': queryset,
+            'changelist_url': self._changelist_url(),
+            'admin_index_url': reverse('%s:index' % site),
+            'has_permission': True,
+            'zmall_batch_discount_input_class': wc['discount_input'],
+            'zmall_batch_submit_class': wc['submit'],
+            'zmall_batch_cancel_class': wc['cancel'],
+        }
     
     def get_queryset(self, request):
         qs = super().get_queryset(request).select_related('category', 'restaurant_settings')
@@ -521,6 +771,15 @@ class ZmallMenuItemAdmin(BusinessAdminMixin, ModelAdmin):
         return None
     
     def price_display(self, obj):
+        if getattr(obj, 'on_sale', False) and obj.sale_price is not None:
+            list_fmt = '{:,.2f}'.format(obj.price)
+            sale_fmt = '{:,.2f}'.format(obj.sale_price)
+            return format_html(
+                '<span style="text-decoration:line-through">₦{}</span> '
+                '<strong>₦{}</strong>',
+                list_fmt,
+                sale_fmt,
+            )
         return f"₦{obj.price:,.2f}"
     price_display.short_description = 'Price'
     

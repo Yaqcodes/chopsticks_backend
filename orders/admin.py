@@ -44,6 +44,10 @@ class BusinessAdminMixin:
         return request.user.is_staff
 
 
+def _order_item_inline_all_readonly():
+    return ('menu_item', 'quantity', 'unit_price', 'total_price', 'special_instructions')
+
+
 class OrderItemInline(admin.TabularInline):
     """Inline admin for order items."""
     
@@ -51,6 +55,17 @@ class OrderItemInline(admin.TabularInline):
     extra = 0
     readonly_fields = ['total_price']
     fields = ['menu_item', 'quantity', 'unit_price', 'total_price', 'special_instructions']
+
+    def get_readonly_fields(self, request, obj=None):
+        if request.user.is_superuser:
+            return list(self.readonly_fields)
+        return list(_order_item_inline_all_readonly())
+
+    def has_add_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
 
 
 @admin.register(Order)
@@ -142,7 +157,25 @@ class OrderItemAdmin(admin.ModelAdmin):
     search_fields = ['order__order_number', 'menu_item__name']
     ordering = ['-order__created_at']
     readonly_fields = ['total_price']
-    
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        """Allow staff to view order lines; only superusers may mutate (see change/add/delete)."""
+        return request.user.is_active and request.user.is_staff
+
+    def get_readonly_fields(self, request, obj=None):
+        if request.user.is_superuser:
+            return list(self.readonly_fields)
+        return [f.name for f in self.model._meta.fields]
+
     def get_queryset(self, request):
         """Optimize queryset with select_related."""
         return super().get_queryset(request).select_related('order', 'menu_item')
@@ -158,6 +191,17 @@ class RoschiOrderItemInline(TabularInline):
     fields = ['menu_item', 'quantity', 'unit_price', 'total_price']
     verbose_name = "Product"
     verbose_name_plural = "Products in This Order"
+
+    def get_readonly_fields(self, request, obj=None):
+        if request.user.is_superuser:
+            return list(self.readonly_fields)
+        return ['menu_item', 'quantity', 'unit_price', 'total_price']
+
+    def has_add_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
     
     def get_queryset(self, request):
         """Filter order items to only show items for this business."""
@@ -343,6 +387,26 @@ class RoschiOrderItemAdmin(BusinessAdminMixin, ModelAdmin):
     search_fields = ['order__order_number', 'menu_item__name']
     ordering = ['-order__created_at']
     readonly_fields = ['total_price']
+
+    def has_add_permission(self, request):
+        if not request.user.is_superuser:
+            return False
+        return super().has_add_permission(request)
+
+    def has_change_permission(self, request, obj=None):
+        if not request.user.is_superuser:
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if not request.user.is_superuser:
+            return False
+        return super().has_delete_permission(request, obj)
+
+    def get_readonly_fields(self, request, obj=None):
+        if request.user.is_superuser:
+            return list(self.readonly_fields)
+        return [f.name for f in self.model._meta.fields]
     
     def unit_price_display(self, obj):
         """Price per unit."""

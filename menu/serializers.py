@@ -51,8 +51,10 @@ class MenuItemSerializer(serializers.ModelSerializer):
     
     category_name = serializers.CharField(source='category.name', read_only=True)
     category_id = serializers.IntegerField(source='category.id', read_only=True)
+    category_slug = serializers.SlugField(source='category.slug', read_only=True, allow_null=True)
     badges_display = serializers.SerializerMethodField()
     formatted_price = serializers.CharField(read_only=True)
+    effective_price = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
     size = serializers.SerializerMethodField()
     colors = serializers.SerializerMethodField()
@@ -61,11 +63,15 @@ class MenuItemSerializer(serializers.ModelSerializer):
         model = MenuItem
         fields = [
             'id', 'name', 'description', 'size', 'sizes', 'sku', 'barcode', 'price', 'formatted_price',
-            'category', 'category_name', 'category_id', 'image',
+            'on_sale', 'sale_price', 'effective_price',
+            'category', 'category_name', 'category_id', 'category_slug', 'image',
             'badges', 'badges_display', 'allergens', 'nutritional_info',
             'is_available', 'is_featured', 'preparation_time', 'sort_order',
             'gender', 'colors',
         ]
+
+    def get_effective_price(self, obj):
+        return obj.get_effective_price()
 
     def get_colors(self, obj):
         return _normalize_colors(getattr(obj, 'colors', None))
@@ -112,6 +118,7 @@ class FeaturedItemsSerializer(serializers.ModelSerializer):
     
     category_name = serializers.CharField(source='category.name', read_only=True)
     formatted_price = serializers.CharField(read_only=True)
+    effective_price = serializers.SerializerMethodField()
     badges_display = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
     size = serializers.SerializerMethodField()
@@ -121,9 +128,13 @@ class FeaturedItemsSerializer(serializers.ModelSerializer):
         model = MenuItem
         fields = [
             'id', 'name', 'description', 'size', 'sizes', 'sku', 'barcode', 'price', 'formatted_price',
+            'on_sale', 'sale_price', 'effective_price',
             'category_name', 'image', 'badges', 'badges_display',
             'is_available', 'preparation_time', 'gender', 'colors',
         ]
+
+    def get_effective_price(self, obj):
+        return obj.get_effective_price()
 
     def get_colors(self, obj):
         return _normalize_colors(getattr(obj, 'colors', None))
@@ -148,6 +159,7 @@ class MenuSearchSerializer(serializers.ModelSerializer):
     
     category_name = serializers.CharField(source='category.name', read_only=True)
     formatted_price = serializers.CharField(read_only=True)
+    effective_price = serializers.SerializerMethodField()
     badges_display = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
     size = serializers.SerializerMethodField()
@@ -157,9 +169,13 @@ class MenuSearchSerializer(serializers.ModelSerializer):
         model = MenuItem
         fields = [
             'id', 'name', 'description', 'size', 'sizes', 'sku', 'barcode', 'price', 'formatted_price',
+            'on_sale', 'sale_price', 'effective_price',
             'category_name', 'image', 'badges', 'badges_display',
             'is_available', 'is_featured', 'gender', 'colors',
         ]
+
+    def get_effective_price(self, obj):
+        return obj.get_effective_price()
 
     def get_colors(self, obj):
         return _normalize_colors(getattr(obj, 'colors', None))
@@ -201,14 +217,19 @@ class CategoryWriteSerializer(serializers.ModelSerializer):
 
 
 class MenuItemWriteSerializer(serializers.ModelSerializer):
+    effective_price = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = MenuItem
         fields = [
             'name', 'description', 'size', 'sizes', 'sku', 'barcode',
-            'price', 'category', 'image', 'badges', 'allergens',
+            'price', 'on_sale', 'sale_price', 'effective_price', 'category', 'image', 'badges', 'allergens',
             'nutritional_info', 'is_available', 'is_featured',
             'preparation_time', 'sort_order', 'gender', 'colors',
         ]
+
+    def get_effective_price(self, obj):
+        return obj.get_effective_price()
 
     def validate_category(self, value):
         # Ensure the category belongs to the same business
@@ -216,3 +237,15 @@ class MenuItemWriteSerializer(serializers.ModelSerializer):
         if value.restaurant_settings != restaurant_settings:
             raise serializers.ValidationError("Category does not belong to this business.")
         return value
+
+    def validate(self, attrs):
+        instance = getattr(self, 'instance', None)
+        on_sale = attrs.get('on_sale', getattr(instance, 'on_sale', False) if instance else False)
+        sale_price = attrs.get('sale_price', getattr(instance, 'sale_price', None) if instance else None)
+        price = attrs.get('price', getattr(instance, 'price', None) if instance else None)
+        if on_sale:
+            if sale_price is None:
+                raise serializers.ValidationError({'sale_price': 'Sale price is required when on sale.'})
+            if price is not None and sale_price >= price:
+                raise serializers.ValidationError({'sale_price': 'Sale price must be less than list price.'})
+        return attrs

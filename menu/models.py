@@ -1,5 +1,8 @@
-from django.db import models
+from decimal import Decimal
+
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
+from django.db import models
 
 from core.models import RestaurantSettings
 
@@ -67,6 +70,18 @@ class MenuItem(models.Model):
         help_text="Product size/variant (e.g., '24-pack 35cl', 'Pure Water')",
     )
     price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
+    on_sale = models.BooleanField(
+        default=False,
+        help_text='When True, customers pay sale_price (must be set). Source of truth for sale state.',
+    )
+    sale_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        help_text='Discounted price when on_sale is True.',
+    )
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='menu_items')
     restaurant_settings = models.ForeignKey(
         RestaurantSettings,
@@ -129,6 +144,20 @@ class MenuItem(models.Model):
     
     def __str__(self):
         return f"{self.name} - {self.category.name}"
+
+    def clean(self):
+        super().clean()
+        if self.on_sale:
+            if self.sale_price is None:
+                raise ValidationError({'sale_price': 'Sale price is required when the product is on sale.'})
+            if self.sale_price >= self.price:
+                raise ValidationError({'sale_price': 'Sale price must be less than list price.'})
+
+    def get_effective_price(self):
+        """Unit price charged at checkout (list price unless on sale with sale_price set)."""
+        if self.on_sale and self.sale_price is not None:
+            return self.sale_price
+        return self.price if self.price is not None else Decimal('0.00')
     
     @property
     def formatted_price(self):

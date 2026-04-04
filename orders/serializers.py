@@ -456,8 +456,9 @@ class UnifiedOrderSerializer(serializers.ModelSerializer):
         for item_data in items_data:
             try:
                 menu_item = item_data['menu_item']
-                item_data['unit_price'] = menu_item.price
-                item_data['total_price'] = menu_item.price * item_data['quantity']
+                eff = menu_item.get_effective_price()
+                item_data['unit_price'] = eff
+                item_data['total_price'] = eff * item_data['quantity']
                 OrderItem.objects.create(order=order, **item_data)
             except Exception as e:
                 # Log the error but continue with other items
@@ -521,7 +522,7 @@ class UnifiedOrderSerializer(serializers.ModelSerializer):
             raise ValueError("restaurant_settings is required for multi-tenant totals calculation")
         
         # Calculate subtotal from items
-        subtotal = sum(item['quantity'] * item['menu_item'].price for item in items_data)
+        subtotal = sum(item['quantity'] * item['menu_item'].get_effective_price() for item in items_data)
         
         # Get restaurant settings for tax calculation
         vat_rate = restaurant_settings.vat_rate
@@ -742,8 +743,8 @@ class GuestOrderSerializer(serializers.ModelSerializer):
                         order=order,
                         menu_item=menu_item,
                         quantity=item_data['quantity'],
-                        unit_price=menu_item.price,
-                        total_price=menu_item.price * item_data['quantity'],
+                        unit_price=menu_item.get_effective_price(),
+                        total_price=menu_item.get_effective_price() * item_data['quantity'],
                         special_instructions=item_data.get('special_instructions', '')
                     )
         except Exception as e:
@@ -810,7 +811,7 @@ class GuestOrderSerializer(serializers.ModelSerializer):
             raise ValueError("restaurant_settings is required for multi-tenant totals calculation")
         
         # Calculate subtotal from items
-        subtotal = sum(item['quantity'] * item['menu_item'].price for item in items_data)
+        subtotal = sum(item['quantity'] * item['menu_item'].get_effective_price() for item in items_data)
         
         # Get restaurant settings for tax calculation
         vat_rate = restaurant_settings.vat_rate
@@ -1087,7 +1088,7 @@ class OrderSerializer(serializers.ModelSerializer):
                         order=order,
                         menu_item=item_data['menu_item'],
                         quantity=item_data['quantity'],
-                        unit_price=item_data.get('unit_price', item_data['menu_item'].price),
+                        unit_price=item_data.get('unit_price', item_data['menu_item'].get_effective_price()),
                         total_price=item_data.get('total_price'),
                         special_instructions=item_data.get('special_instructions', '')
                     )
@@ -1200,7 +1201,7 @@ class OrderSerializer(serializers.ModelSerializer):
             raise ValueError("restaurant_settings is required for multi-tenant totals calculation")
         
         # Calculate subtotal from items
-        subtotal = sum(item['quantity'] * item['menu_item'].price for item in items_data)
+        subtotal = sum(item['quantity'] * item['menu_item'].get_effective_price() for item in items_data)
         
         # Get restaurant settings for tax calculation
         vat_rate = restaurant_settings.vat_rate
