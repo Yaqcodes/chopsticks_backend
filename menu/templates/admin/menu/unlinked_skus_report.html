@@ -1,0 +1,89 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{{ admin_index_url }}">{% trans 'Home' %}</a>
+  &rsaquo; <a href="{{ changelist_url }}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {% trans 'Unlinked SKUs' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>{% trans 'Unlinked SKUs (no catalog Product)' %}</h1>
+
+<p>{% blocktrans trimmed %}
+These SKU rows are not linked to a grouped storefront Product.
+Link them individually from each SKU change form (“Catalog Product”), bulk-link via the API, or—when catalog products exist—select rows below and link in one submit.
+{% endblocktrans %}</p>
+
+{% if not tenant_resolved %}
+<p class="errornote">{% trans 'Could not resolve business for this admin site.' %}</p>
+{% else %}
+<form method="post">
+  {% csrf_token %}
+  {% if has_catalog_products %}
+  <div class="module aligned" style="margin-bottom:1.5em;">
+    <h2>{% trans 'Bulk link to catalog Product' %}</h2>
+    <p>
+      <label for="id_product_id">{% trans 'Catalog product' %}:</label>
+      <select name="product_id" id="id_product_id" required>
+        <option value="">{% trans '— choose —' %}</option>
+        {% for p in catalog_products %}
+        <option value="{{ p.pk }}">{{ p.name }} (id {{ p.pk }})</option>
+        {% endfor %}
+      </select>
+    </p>
+    <p class="submit-row">
+      <input type="submit" class="default" value="{% trans 'Link selected SKUs' %}">
+    </p>
+  </div>
+  {% else %}
+  <p class="warning" style="margin-bottom:1.5em;">
+    {% blocktrans trimmed %}
+    There are no catalog Products yet for this business. Create a Product first to enable bulk linking from this report.
+    {% endblocktrans %}
+  </p>
+  {% endif %}
+
+  {% if items %}
+  <table class="listing" style="width:100%;">
+    <thead>
+      <tr>
+        {% if has_catalog_products %}
+        <th style="width:2.5rem;"><input type="checkbox" id="unlinked_select_all" onclick="document.querySelectorAll('.unlinked-cb').forEach((c)=>{ c.checked=this.checked; });"></th>
+        {% endif %}
+        <th>{% trans 'Name' %}</th>
+        <th>{% trans 'Category' %}</th>
+        <th>{% trans 'Barcode' %}</th>
+        <th>{% trans 'SKU qty' %}</th>
+        <th>{% trans 'Available' %}</th>
+        <th>{% trans 'Edit' %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        {% if has_catalog_products %}
+        <td><input class="unlinked-cb" type="checkbox" name="menuitem_id" value="{{ item.pk }}"></td>
+        {% endif %}
+        <td>{{ item.name }}</td>
+        <td>{{ item.category.name|default:"—" }}</td>
+        <td>{{ item.barcode|default:"—" }}</td>
+        <td>{{ item.sku }}</td>
+        <td>{% if item.is_available %}{% trans 'Yes' %}{% else %}{% trans 'No' %}{% endif %}</td>
+        <td>
+          <a href="{% url item_change_url_name item.pk %}">{% trans 'Change' %}</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p><em>{% trans 'No unlinked SKUs for this business.' %}</em></p>
+  {% endif %}
+</form>
+{% endif %}
+
+<p style="margin-top:2em;"><a href="{{ changelist_url }}">{% trans 'Back to SKU list' %}</a></p>
+{% endblock %}

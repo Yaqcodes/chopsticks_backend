@@ -3,12 +3,5 @@
 {{ block.super }}
 {% if zmall_category_slugs_json is not None %}
 <input type="hidden" name="{{ adminform.form.prefix }}_zmall_category_slugs" value="{{ zmall_category_slugs_json|force_escape }}" id="id_{{ adminform.form.prefix }}_zmall_category_slugs">
-<fieldset class="module">
-  <h2>Additional images</h2>
-  <p class="description">Upload extra product images here (multiple at once). They appear in addition to the main image.</p>
-  <div class="form-row zmall-additional-images">
-    <input type="file" name="zmall_additional_images" multiple accept="image/*" class="zmall-file-input">
-  </div>
-</fieldset>
 {% endif %}
 {% endblock %}

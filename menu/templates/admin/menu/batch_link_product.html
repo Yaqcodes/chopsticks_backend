@@ -1,0 +1,200 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrahead %}
+{{ block.super }}
+{{ form.media }}
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="px-4 lg:px-12">
+  <div class="container mb-6 mx-auto -my-3 lg:mb-12">
+    <ul class="flex flex-wrap items-center gap-x-1 text-sm text-gray-500 dark:text-gray-400">
+      <li><a href="{{ admin_index_url }}" class="hover:text-gray-900 dark:hover:text-gray-200">{% trans 'Home' %}</a></li>
+      <li class="mx-1 text-gray-300 dark:text-gray-600">/</li>
+      <li><a href="{{ changelist_url }}" class="hover:text-gray-900 dark:hover:text-gray-200">{{ opts.verbose_name_plural|capfirst }}</a></li>
+      <li class="mx-1 text-gray-300 dark:text-gray-600">/</li>
+      <li class="font-medium text-gray-900 dark:text-gray-100">{% trans 'Link SKUs to Catalog Product' %}</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="px-4 lg:px-12">
+<div class="container mx-auto max-w-6xl">
+
+  <h1 class="font-semibold mb-6 text-2xl text-gray-900 dark:text-white">
+    {% trans 'Link selected SKUs to a Catalog Product' %}
+  </h1>
+
+  <p class="mb-6 text-gray-500 text-sm dark:text-gray-400">
+    {% blocktrans count counter=queryset.count %}
+      You are about to link <strong class="text-gray-900 dark:text-white">{{ counter }}</strong> SKU to a catalog product.
+    {% plural %}
+      You are about to link <strong class="text-gray-900 dark:text-white">{{ counter }}</strong> SKUs to a catalog product.
+    {% endblocktrans %}
+  </p>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+    <div class="bg-red-50 border border-red-300 mb-6 px-4 py-3 rounded-md text-red-700 text-sm dark:bg-red-900/20 dark:border-red-700 dark:text-red-400">
+      {{ form.non_field_errors }}
+    </div>
+    {% endif %}
+
+    <div class="gap-6 grid grid-cols-1 lg:grid-cols-2 mb-6">
+
+      {# ── Target product panel ── #}
+      <div class="bg-white border border-gray-200 rounded-md shadow-sm dark:bg-gray-900 dark:border-gray-800">
+        <h2 class="bg-gray-50 border-b border-gray-200 font-semibold px-4 py-3 rounded-t-md text-gray-900 text-sm dark:bg-white/[.02] dark:border-gray-800 dark:text-gray-200">
+          {% trans 'Target product' %}
+        </h2>
+        <div class="px-4 py-4 space-y-4">
+
+          {# Mode radio #}
+          <div>
+            <span class="block font-medium mb-2 text-gray-700 text-xs uppercase tracking-wide dark:text-gray-300">
+              {{ form.mode.label }}
+            </span>
+            <div class="flex flex-wrap gap-4">{{ form.mode }}</div>
+            {% if form.mode.errors %}
+            <p class="mt-1 text-red-600 text-xs dark:text-red-400">{{ form.mode.errors }}</p>
+            {% endif %}
+          </div>
+
+          {# Existing product autocomplete #}
+          <div data-batch-link-mode="existing">
+            <label for="{{ form.product.id_for_label }}" class="block font-medium mb-1 text-gray-700 text-xs uppercase tracking-wide dark:text-gray-300">
+              {{ form.product.label }}
+            </label>
+            {{ form.product }}
+            {% if form.product.help_text %}
+            <p class="mt-1 text-gray-400 text-xs dark:text-gray-500">{{ form.product.help_text }}</p>
+            {% endif %}
+            {% if form.product.errors %}
+            <p class="mt-1 text-red-600 text-xs dark:text-red-400">{{ form.product.errors }}</p>
+            {% endif %}
+          </div>
+
+          {# New product fields #}
+          <div data-batch-link-mode="new" class="space-y-4">
+            <div>
+              <label for="{{ form.name.id_for_label }}" class="block font-medium mb-1 text-gray-700 text-xs uppercase tracking-wide dark:text-gray-300">
+                {{ form.name.label }} *
+              </label>
+              {{ form.name }}
+              {% if form.name.errors %}
+              <p class="mt-1 text-red-600 text-xs dark:text-red-400">{{ form.name.errors }}</p>
+              {% endif %}
+            </div>
+            <div>
+              <label for="{{ form.category.id_for_label }}" class="block font-medium mb-1 text-gray-700 text-xs uppercase tracking-wide dark:text-gray-300">
+                {{ form.category.label }}
+              </label>
+              {{ form.category }}
+              {% if form.category.errors %}
+              <p class="mt-1 text-red-600 text-xs dark:text-red-400">{{ form.category.errors }}</p>
+              {% endif %}
+            </div>
+            <div>
+              <label for="{{ form.gender.id_for_label }}" class="block font-medium mb-1 text-gray-700 text-xs uppercase tracking-wide dark:text-gray-300">
+                {{ form.gender.label }}
+              </label>
+              {{ form.gender }}
+              {% if form.gender.errors %}
+              <p class="mt-1 text-red-600 text-xs dark:text-red-400">{{ form.gender.errors }}</p>
+              {% endif %}
+            </div>
+            <div>
+              <label for="{{ form.base_price.id_for_label }}" class="block font-medium mb-1 text-gray-700 text-xs uppercase tracking-wide dark:text-gray-300">
+                {{ form.base_price.label }}
+              </label>
+              {{ form.base_price }}
+              <p class="mt-1 text-gray-400 text-xs dark:text-gray-500">
+                {% trans "Informational only — checkout still uses each variant's price." %}
+              </p>
+              {% if form.base_price.errors %}
+              <p class="mt-1 text-red-600 text-xs dark:text-red-400">{{ form.base_price.errors }}</p>
+              {% endif %}
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {# ── Selected SKUs panel ── #}
+      <div class="bg-white border border-gray-200 rounded-md shadow-sm dark:bg-gray-900 dark:border-gray-800">
+        <h2 class="bg-gray-50 border-b border-gray-200 font-semibold px-4 py-3 rounded-t-md text-gray-900 text-sm dark:bg-white/[.02] dark:border-gray-800 dark:text-gray-200">
+          {% trans 'Selected SKUs' %} <span class="font-normal text-gray-400 dark:text-gray-500">({{ queryset.count }})</span>
+        </h2>
+        <div class="overflow-x-auto">
+          <table class="border-collapse text-sm w-full">
+            <thead>
+              <tr class="border-b border-gray-200 dark:border-gray-800">
+                <th class="font-medium px-4 py-2 text-gray-500 text-left dark:text-gray-400">{% trans 'Name' %}</th>
+                <th class="font-medium px-4 py-2 text-gray-500 text-left dark:text-gray-400">{% trans 'Category' %}</th>
+                <th class="font-medium px-4 py-2 text-gray-500 text-left dark:text-gray-400">{% trans 'Barcode' %}</th>
+                <th class="font-medium px-4 py-2 text-gray-500 text-left dark:text-gray-400">{% trans 'Currently linked' %}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+              {% for sku in queryset %}
+              <tr class="hover:bg-gray-50 dark:hover:bg-white/[.02]">
+                <td class="px-4 py-2 text-gray-700 dark:text-gray-300">
+                  <a href="{% url sku_change_url_name sku.pk %}" class="text-primary-600 hover:underline dark:text-primary-400">{{ sku.name }}</a>
+                </td>
+                <td class="px-4 py-2 text-gray-500 dark:text-gray-400">{{ sku.category.name|default:'—' }}</td>
+                <td class="px-4 py-2 text-gray-500 dark:text-gray-400">{{ sku.barcode|default:'—' }}</td>
+                <td class="px-4 py-2 text-gray-500 dark:text-gray-400">
+                  {% if sku.product_id %}
+                    <a href="{% url product_change_url_name sku.product_id %}" class="text-primary-600 hover:underline dark:text-primary-400">{{ sku.product.name }}</a>
+                  {% else %}—{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="border-t border-gray-100 dark:border-gray-800 px-4 py-3 text-gray-400 text-xs dark:text-gray-500">
+          {% trans 'SKUs already linked to a different product will fail validation. Unlink them first, or pick a different selection.' %}
+        </p>
+      </div>
+
+    </div>
+
+    {# ── Action buttons ── #}
+    <div class="flex flex-col-reverse gap-3 items-center lg:flex-row lg:justify-start mb-12">
+      <button type="submit"
+              class="bg-primary-600 block border border-transparent font-medium px-4 py-2 rounded-md text-sm text-white w-full hover:bg-primary-700 lg:w-auto">
+        {% trans 'Link SKUs' %}
+      </button>
+      <a href="{{ changelist_url }}"
+         class="block border border-gray-300 font-medium px-4 py-2 rounded-md text-center text-gray-600 text-sm transition-colors w-full hover:bg-gray-50 lg:w-auto dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200">
+        {% trans 'Cancel' %}
+      </a>
+    </div>
+
+  </form>
+</div>
+</div>
+
+<script>
+(function () {
+  function applyMode() {
+    var mode = (document.querySelector('input[name="mode"]:checked') || {}).value || 'existing';
+    document.querySelectorAll('[data-batch-link-mode]').forEach(function (el) {
+      el.style.display = (el.dataset.batchLinkMode === mode) ? '' : 'none';
+    });
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('input[name="mode"]').forEach(function (el) {
+      el.addEventListener('change', applyMode);
+    });
+    applyMode();
+  });
+})();
+</script>
+{% endblock %}
