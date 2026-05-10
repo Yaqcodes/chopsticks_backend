@@ -251,8 +251,15 @@ def validate_order_items(items):
             if not menu_item.is_available:
                 errors.append(f"Item '{menu_item.name}' is not available")
             
-            # Check if price matches (in case of price changes)
-            if menu_item.price != item_data.get('unit_price', menu_item.price):
+            # Check if price matches effective (list/sale) price
+            expected = menu_item.get_effective_price()
+            submitted = item_data.get('unit_price', expected)
+            try:
+                from decimal import Decimal
+                submitted_dec = Decimal(str(submitted))
+                if abs(submitted_dec - expected) > Decimal('0.01'):
+                    errors.append(f"Price for '{menu_item.name}' has changed")
+            except Exception:
                 errors.append(f"Price for '{menu_item.name}' has changed")
             
         except MenuItem.DoesNotExist:

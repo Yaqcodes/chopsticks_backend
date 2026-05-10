@@ -69,6 +69,7 @@ urlpatterns += [
     path('api/core/', include('core.urls')),
     path('api/auth/', include('accounts.urls')),
     path('api/menu/', include('menu.urls')),
+    path('api/', include('menu.product_urls')),
     path('api/orders/', include('orders.urls')),
     path('api/loyalty/', include('loyalty.urls')),
     path('api/payments/', include('payments.urls')),

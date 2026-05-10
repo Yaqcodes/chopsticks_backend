@@ -1,0 +1,35 @@
+{% extends "admin/change_form.html" %}
+
+{# Order: Main info → Gallery → Linked variants → Status → SEO (inlines between main and remaining fieldsets). #}
+
+{% block field_sets %}
+    {% for fieldset in adminform %}
+        {% if forloop.first %}
+            {% if "tab" not in fieldset.classes %}
+                {% include 'admin/includes/fieldset.html' %}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+
+    {% include "unfold/helpers/fieldsets_tabs.html" %}
+{% endblock %}
+
+{% block after_field_sets %}
+    {% for inline_admin_formset in inline_admin_formsets %}
+        {% include inline_admin_formset.opts.template %}
+    {% endfor %}
+{% endblock %}
+
+{% block inline_field_sets %}
+    {# Rendered in after_field_sets so gallery and variants sit above Status / SEO. #}
+{% endblock %}
+
+{% block after_related_objects %}
+    {% for fieldset in adminform %}
+        {% if not forloop.first %}
+            {% if "tab" not in fieldset.classes %}
+                {% include 'admin/includes/fieldset.html' %}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+{% endblock %}

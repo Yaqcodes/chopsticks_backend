@@ -134,6 +134,9 @@ yarn-error.log*
 docs/_build/
 site/
 
+# Local exports, spreadsheets, and scratch docs under docs/ (not versioned)
+/docs/
+
 # Celery
 celerybeat-schedule
 celerybeat.pid

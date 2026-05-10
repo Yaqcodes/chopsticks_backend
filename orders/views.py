@@ -1,7 +1,7 @@
 import logging
 from rest_framework import generics, status, filters
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.db import transaction
@@ -76,12 +76,10 @@ class OrderListView(generics.ListAPIView):
 
 class OrderDetailView(generics.RetrieveAPIView):
     """Get detailed information about a specific order."""
-    
     permission_classes = [IsAuthenticated]
     serializer_class = OrderDetailSerializer
-    
+
     def get_queryset(self):
-        # Handle Swagger schema generation
         if getattr(self, 'swagger_fake_view', False):
             return Order.objects.none()
         restaurant_settings = get_business_from_request(self.request)
@@ -90,11 +88,20 @@ class OrderDetailView(generics.RetrieveAPIView):
             restaurant_settings=restaurant_settings,
         )
 
+    def get_object(self):
+        queryset = self.get_queryset()
+        if 'pk' in self.kwargs:
+            obj = get_object_or_404(queryset, pk=self.kwargs['pk'])
+        else:
+            obj = get_object_or_404(queryset, order_number=self.kwargs['order_number'])
+        self.check_object_permissions(self.request, obj)
+        return obj
+
 
 class AdminOrderListView(generics.ListAPIView):
     """Admin view to list all orders with filtering capabilities."""
     
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = OrderListSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['status', 'payment_status', 'delivery_type']
@@ -134,6 +141,29 @@ class AdminOrderListView(generics.ListAPIView):
                 pass
         
         return queryset
+
+
+class AdminOrderDetailView(generics.RetrieveAPIView):
+    """Admin view to get detailed information about any specific order."""
+    permission_classes = [IsAdminUser]
+    serializer_class = OrderDetailSerializer
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Order.objects.none()
+        if not self.request.user.is_staff:
+            return Order.objects.none()
+        restaurant_settings = get_business_from_request(self.request)
+        return Order.objects.filter(restaurant_settings=restaurant_settings)
+
+    def get_object(self):
+        queryset = self.get_queryset()
+        if 'pk' in self.kwargs:
+            obj = get_object_or_404(queryset, pk=self.kwargs['pk'])
+        else:
+            obj = get_object_or_404(queryset, order_number=self.kwargs['order_number'])
+        self.check_object_permissions(self.request, obj)
+        return obj
 
 
 @api_view(['POST'])
@@ -317,7 +347,7 @@ def calculate_cart_totals_view(request):
         cart_items_with_prices.append({
             "menu_item_id": item['menu_item_id'],
             "quantity": item['quantity'],
-            "price": menu_item.price  # add the price here
+            "price": menu_item.get_effective_price(),
         })
     
     # Get UserReward if provided
