@@ -31,9 +31,7 @@ def _apply_size_filter(queryset, size_str):
     if not size_str or not str(size_str).strip():
         return queryset
     size = str(size_str).strip()
-    if connection.vendor == 'sqlite':
-        return queryset.filter(sizes__icontains=f'"{size}"')
-    return queryset.filter(sizes__contains=[size])
+    return queryset.filter(size__iexact=size)
 
 
 def _apply_color_filter(queryset, color_name):

@@ -93,17 +93,15 @@ def menu_item_filter_options(request):
         )
     names = set()
     sizes_out = set()
-    for colors, sizes in qs.values_list('colors', 'sizes').iterator(chunk_size=500):
+    for colors, size in qs.values_list('colors', 'size').iterator(chunk_size=500):
         if colors and isinstance(colors, list):
             for c in colors:
                 if isinstance(c, dict):
                     name = (c.get('name') or '').strip()
                     if name:
                         names.add(name)
-        if sizes and isinstance(sizes, list):
-            for s in sizes:
-                if s is not None and str(s).strip():
-                    sizes_out.add(str(s).strip())
+        if size and str(size).strip():
+            sizes_out.add(str(size).strip())
     return Response({
         'colors': sorted(names, key=str.lower),
         'sizes': sorted(sizes_out, key=str.lower),
