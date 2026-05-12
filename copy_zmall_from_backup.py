@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Copy ZMall tenant (id=4) and all associated categories, menu items, and
+Copy Zmall tenant (id=4) and all associated categories, menu items, and
 menu item images from 'db before migration fix.sqlite3' to chopsticks_backend/db.sqlite3.
 """
 import sqlite3
@@ -30,7 +30,7 @@ def main():
             "SELECT * FROM core_restaurantsettings WHERE id = ?", (ZMALL_SOURCE_ID,)
         ).fetchone()
         if not row:
-            print("ZMall tenant (id=4) not found in source.")
+            print("Zmall tenant (id=4) not found in source.")
             return 1
 
         keys = [k for k in row.keys() if k != "id"]
@@ -41,7 +41,7 @@ def main():
             [row[k] for k in keys],
         )
         new_tenant_id = tgt.execute("SELECT last_insert_rowid()").fetchone()[0]
-        print(f"Inserted tenant ZMall -> new id = {new_tenant_id}")
+        print(f"Inserted tenant Zmall -> new id = {new_tenant_id}")
 
         # 2) Copy categories (restaurant_settings_id=4 -> new_tenant_id)
         cat_rows = src.execute(
@@ -103,7 +103,7 @@ def main():
         print(f"Inserted {len(img_rows)} menu item images.")
 
         tgt.commit()
-        print("Done. ZMall tenant and related data copied to chopsticks_backend/db.sqlite3")
+        print("Done. Zmall tenant and related data copied to chopsticks_backend/db.sqlite3")
         return 0
     finally:
         src.close()

@@ -1,5 +1,5 @@
 """
-Shared catalog queryset for ZMall list + filter-options (server-side filters & sort).
+Shared catalog queryset for Zmall list + filter-options (server-side filters & sort).
 """
 
 from django.db import connection

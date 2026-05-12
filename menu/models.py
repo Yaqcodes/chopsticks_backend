@@ -39,7 +39,7 @@ class Category(models.Model):
 
 class Product(models.Model):
     """
-    Grouped parent catalog row for ZMall (explicitly linked MenuItems are variants/SKUs).
+    Grouped parent catalog row for Zmall (explicitly linked MenuItems are variants/SKUs).
     base_price is informational only; checkout uses MenuItem.price per variant.
     """
 
@@ -82,8 +82,8 @@ class Product(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = 'ZMall Catalog Product'
-        verbose_name_plural = 'ZMall Catalog Products'
+        verbose_name = 'Zmall Catalog Product'
+        verbose_name_plural = 'Zmall Catalog Products'
         ordering = ['sort_order', '-created_at', 'name']
         unique_together = [['restaurant_settings', 'slug']]
         indexes = [
@@ -142,7 +142,7 @@ class MenuItem(models.Model):
         ('new', 'New'),
         ('chef_special', 'Chef Special'),
     ]
-    # Badges for apparel tenant (ZMall only)
+    # Badges for apparel tenant (Zmall only)
     BADGE_CHOICES_ZMALL = [
         ('bestseller', 'Bestseller'),
         ('sale', 'Sale'),
@@ -181,7 +181,7 @@ class MenuItem(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name='variants',
-        help_text='ZMall grouped product parent; manual link only. Leave blank for non-grouped SKUs.',
+        help_text='Zmall grouped product parent; manual link only. Leave blank for non-grouped SKUs.',
     )
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='menu_items')
     restaurant_settings = models.ForeignKey(
@@ -214,7 +214,7 @@ class MenuItem(models.Model):
         help_text="Product barcode (UPC, EAN, or custom QR string)."
     )
 
-    # Apparel-only fields (used by ZMall; leave blank for food tenants)
+    # Apparel-only fields (used by Zmall; leave blank for food tenants)
     gender = models.CharField(
         max_length=20,
         choices=GENDER_CHOICES,

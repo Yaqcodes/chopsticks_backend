@@ -20,6 +20,7 @@ from .serializers import (
     CategorySerializer, MenuItemSerializer, MenuItemDetailSerializer,
     FeaturedItemsSerializer, MenuSearchSerializer,
 )
+from .size_sort import size_sort_key
 
 
 class CategoryListView(generics.ListAPIView):
@@ -104,7 +105,7 @@ def menu_item_filter_options(request):
             sizes_out.add(str(size).strip())
     return Response({
         'colors': sorted(names, key=str.lower),
-        'sizes': sorted(sizes_out, key=str.lower),
+        'sizes': sorted(sizes_out, key=size_sort_key),
     })
 
 

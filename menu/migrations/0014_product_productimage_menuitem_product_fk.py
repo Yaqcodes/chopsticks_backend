@@ -67,8 +67,8 @@ class Migration(migrations.Migration):
                 ),
             ],
             options={
-                "verbose_name": "ZMall Catalog Product",
-                "verbose_name_plural": "ZMall Catalog Products",
+                "verbose_name": "Zmall Catalog Product",
+                "verbose_name_plural": "Zmall Catalog Products",
                 "ordering": ["sort_order", "-created_at", "name"],
             },
         ),
@@ -107,7 +107,7 @@ class Migration(migrations.Migration):
             name="product",
             field=models.ForeignKey(
                 blank=True,
-                help_text="ZMall grouped product parent; manual link only. Leave blank for non-grouped SKUs.",
+                help_text="Zmall grouped product parent; manual link only. Leave blank for non-grouped SKUs.",
                 null=True,
                 on_delete=django.db.models.deletion.SET_NULL,
                 related_name="variants",

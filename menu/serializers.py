@@ -3,6 +3,7 @@ from rest_framework import serializers
 from django.utils.text import slugify
 
 from .models import Category, MenuItem, Product
+from .size_sort import size_sort_key
 
 
 def _media_url(path):
@@ -49,7 +50,7 @@ def _distinct_variant_sizes(product):
             if k not in seen_lower:
                 seen_lower.add(k)
                 ordered.append(s)
-    return sorted(ordered, key=lambda x: (str(x).lower(),))
+    return sorted(ordered, key=size_sort_key)
 
 
 def _distinct_variant_colors(product):

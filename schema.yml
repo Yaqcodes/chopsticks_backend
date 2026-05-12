@@ -2182,7 +2182,7 @@ components:
         product_id:
           type: integer
           nullable: true
-          description: Linked grouped catalog Product (ZMall); null when this SKU is not linked.
+          description: Linked grouped catalog Product (Zmall); null when this SKU is not linked.
         name:
           type: string
           maxLength: 200
@@ -2191,10 +2191,10 @@ components:
         size:
           type: string
           readOnly: true
-          description: Single size for this SKU row (authoritative for ZMall listings, filters, and matrices).
+          description: Single size for this SKU row (authoritative for Zmall listings, filters, and matrices).
         sizes:
           description: |-
-            Legacy JSON list; not used for ZMall catalog size facets or variant matrices.
+            Legacy JSON list; not used for Zmall catalog size facets or variant matrices.
             Use ``size`` (single string per SKU row) as the source of truth for sizing.
         sku:
           type: integer
@@ -2282,7 +2282,7 @@ components:
         product_id:
           type: integer
           nullable: true
-          description: Linked grouped catalog Product (ZMall); null when this SKU is not linked.
+          description: Linked grouped catalog Product (Zmall); null when this SKU is not linked.
         name:
           type: string
           maxLength: 200
@@ -2291,10 +2291,10 @@ components:
         size:
           type: string
           readOnly: true
-          description: Single size for this SKU row (authoritative for ZMall listings, filters, and matrices).
+          description: Single size for this SKU row (authoritative for Zmall listings, filters, and matrices).
         sizes:
           description: |-
-            Legacy JSON list; not used for ZMall catalog size facets or variant matrices.
+            Legacy JSON list; not used for Zmall catalog size facets or variant matrices.
             Use ``size`` (single string per SKU row) as the source of truth for sizing.
         sku:
           type: integer
@@ -2393,7 +2393,7 @@ components:
         product_id:
           type: integer
           nullable: true
-          description: Linked grouped catalog Product (ZMall); null when this SKU is not linked.
+          description: Linked grouped catalog Product (Zmall); null when this SKU is not linked.
         name:
           type: string
           maxLength: 200
@@ -2402,10 +2402,10 @@ components:
         size:
           type: string
           readOnly: true
-          description: Single size for this SKU row (authoritative for ZMall listings, filters, and matrices).
+          description: Single size for this SKU row (authoritative for Zmall listings, filters, and matrices).
         sizes:
           description: |-
-            Legacy JSON list; not used for ZMall catalog size facets or variant matrices.
+            Legacy JSON list; not used for Zmall catalog size facets or variant matrices.
             Use ``size`` (single string per SKU row) as the source of truth for sizing.
         sku:
           type: integer

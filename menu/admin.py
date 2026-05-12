@@ -58,7 +58,7 @@ class ZmallBadgeListFilter(admin.SimpleListFilter):
 
 
 class ZmallCategoryListFilter(admin.SimpleListFilter):
-    """Category filter limited to ZMall categories (same business as the admin site)."""
+    """Category filter limited to Zmall categories (same business as the admin site)."""
     title = 'category'
     parameter_name = 'category'
 
@@ -182,7 +182,7 @@ class MenuItemAdmin(admin.ModelAdmin):
         ('Apparel (optional)', {
             'fields': ('gender', 'sizes', 'colors', 'images'),
             'classes': ('collapse',),
-            'description': 'Used by ZMall; leave blank for food/beverage.',
+            'description': 'Used by Zmall; leave blank for food/beverage.',
         }),
     )
     
@@ -336,7 +336,7 @@ class RoschiMenuItemAdmin(BusinessAdminMixin, ModelAdmin):
         super().save_model(request, obj, form, change)
 
 
-# ---- ZMall forms and admin ----
+# ---- Zmall forms and admin ----
 import json
 from .widgets import ColorPickerWidget
 
@@ -363,14 +363,14 @@ def _zmall_batch_sale_widget_classes():
 
 
 class ZmallMenuItemForm(forms.ModelForm):
-    """Form for ZMall SKUs: one barcode per row; manual size on ``MenuItem.size``; colors picker."""
+    """Form for Zmall SKUs: one barcode per row; manual size on ``MenuItem.size``; colors picker."""
     
     badge_choices = forms.MultipleChoiceField(
         label='Badges',
         choices=MenuItem.BADGE_CHOICES_ZMALL,
         required=False,
         widget=forms.CheckboxSelectMultiple,
-        help_text='Select badges shown on the product (ZMall only: Bestseller, Sale).',
+        help_text='Select badges shown on the product (Zmall only: Bestseller, Sale).',
     )
     discount_percent_calculator = forms.DecimalField(
         label='Discount % (calculator)',
@@ -459,7 +459,7 @@ class ZmallMenuItemForm(forms.ModelForm):
 
 
 class ZmallCategoryAdmin(BusinessAdminMixin, ModelAdmin):
-    """Categories for ZMall: keep slug safe for non-technical users."""
+    """Categories for Zmall: keep slug safe for non-technical users."""
     
     list_display = ['name', 'is_active', 'product_count', 'created_at']
     list_filter = ['is_active', 'created_at']
@@ -538,7 +538,7 @@ class _ZmallInlinePermMixin:
     Delegate inline view/change/delete/add permissions to the parent admin site
     instead of Django's model-level permission system.
 
-    Without this, non-superuser ZMall staff users (who have business access via
+    Without this, non-superuser Zmall staff users (who have business access via
     BusinessAdminSite.has_permission but no explicit menu.view_menuitem grants)
     would fail the default has_view_or_change_permission check and the inlines
     would be silently excluded from the change form.
@@ -636,7 +636,7 @@ class LinkedVariantsInline(_ZmallInlinePermMixin, TabularInline):
 
 
 class ZmallProductForm(forms.ModelForm):
-    """Grouped catalog Product: ZMall badges only."""
+    """Grouped catalog Product: Zmall badges only."""
 
     badge_choices = forms.MultipleChoiceField(
         label='Badges',
@@ -677,7 +677,7 @@ class ZmallProductForm(forms.ModelForm):
 
 
 class ZmallProductAdmin(BusinessAdminMixin, ModelAdmin):
-    """Grouped ZMall storefront product; variants are linked MenuItems."""
+    """Grouped Zmall storefront product; variants are linked MenuItems."""
 
     form = ZmallProductForm
     change_form_template = 'admin/menu/product/zmall_product_change_form.html'
@@ -798,7 +798,7 @@ class ZmallProductAdmin(BusinessAdminMixin, ModelAdmin):
 
 
 class ZmallMenuItemAdmin(BusinessAdminMixin, ModelAdmin):
-    """ZMall SKUs: manual size per row, colour picker; one barcode per MenuItem."""
+    """Zmall SKUs: manual size per row, colour picker; one barcode per MenuItem."""
 
     form = ZmallMenuItemForm
     change_form_template = 'admin/menu/menuitem/zmall_menuitem_change_form.html'
@@ -827,7 +827,7 @@ class ZmallMenuItemAdmin(BusinessAdminMixin, ModelAdmin):
     fieldsets = (
         ('Product', {
             'fields': ('name', 'description', 'category', 'product', 'price', 'image', 'barcode'),
-            'description': 'SKU / variant row. Optionally link to a grouped catalog Product (ZMall storefront).',
+            'description': 'SKU / variant row. Optionally link to a grouped catalog Product (Zmall storefront).',
         }),
         ('Apparel', {
             'fields': ('gender', 'size', 'colors'),
@@ -840,7 +840,7 @@ class ZmallMenuItemAdmin(BusinessAdminMixin, ModelAdmin):
         ('Status', {
             'fields': ('is_available', 'is_featured', 'sku'),
         }),
-        ('Badges (ZMall only)', {
+        ('Badges (Zmall only)', {
             'fields': ('badge_choices',),
             'description': 'Bestseller and Sale only.',
         }),
@@ -1377,7 +1377,7 @@ class ZmallMenuItemAdmin(BusinessAdminMixin, ModelAdmin):
 
 
 class ProductVariantLinkEventAdmin(BusinessAdminMixin, ModelAdmin):
-    """Read-only audit list for variant link/unlink (ZMall storefront admin)."""
+    """Read-only audit list for variant link/unlink (Zmall storefront admin)."""
 
     list_display = (
         'created_at',

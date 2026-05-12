@@ -1,6 +1,6 @@
 # Deploying Chopsticks Backend on PythonAnywhere
 
-Steps to run this Django project on PythonAnywhere and serve all tenants (Chopsticks & Bowls, Roschi Water, ZMall).
+Steps to run this Django project on PythonAnywhere and serve all tenants (Chopsticks & Bowls, Roschi Water, Zmall).
 
 ---
 
@@ -119,7 +119,7 @@ python manage.py createsuperuser
 ## 8. Tenant configuration (multi-tenant)
 
 - Open Django admin (e.g. `https://YOUR_USERNAME.pythonanywhere.com/admin/` or your main admin URL).
-- For each business (Chopsticks & Bowls, Roschi Water, ZMall):
+- For each business (Chopsticks & Bowls, Roschi Water, Zmall):
   - Create or edit a **RestaurantSettings** record.
   - Set **domain** to the site’s primary domain (e.g. `zmall.ng`, `www.zmall.ng`, `chopsticksandbowls.com`).
   - Add business-specific **Paystack** keys and any other per-tenant settings.

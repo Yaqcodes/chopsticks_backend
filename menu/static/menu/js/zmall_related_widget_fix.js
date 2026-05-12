@@ -1,5 +1,5 @@
 /**
- * Fixes the edit (pencil) / view / delete links for autocomplete (Select2) FK fields in ZMall admin.
+ * Fixes the edit (pencil) / view / delete links for autocomplete (Select2) FK fields in Zmall admin.
  *
  * 1) Django's RelatedObjectLookups.updateRelatedObjectLinks() uses $(select).nextAll('.change-related')
  *    which only works when the <select> is a direct sibling of those links. Unfold (and AutocompleteSelect)

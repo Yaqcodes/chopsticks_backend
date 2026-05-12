@@ -6,7 +6,7 @@ from menu.models import Category
 
 
 class Command(BaseCommand):
-    help = "Seed ZMall apparel categories (from zmall-frontend mockData)."
+    help = "Seed Zmall apparel categories (from zmall-frontend mockData)."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -21,16 +21,17 @@ class Command(BaseCommand):
 
         zmall = RestaurantSettings.objects.filter(domain__icontains='zmall').first()
         if not zmall and not dry_run:
-            self.stderr.write(self.style.ERROR("ZMall tenant not found. Create RestaurantSettings with domain containing 'zmall'."))
+            self.stderr.write(self.style.ERROR("Zmall tenant not found. Create RestaurantSettings with domain containing 'zmall'."))
             return
 
         categories = [
             {"name": "Pants", "slug": "pants", "sort_order": 1},
             {"name": "Shoes", "slug": "shoes", "sort_order": 2},
-            {"name": "Bags", "slug": "bags", "sort_order": 3},
-            {"name": "Accessories", "slug": "accessories", "sort_order": 4},
-            {"name": "Dresses", "slug": "dresses", "sort_order": 5},
-            {"name": "Shirts", "slug": "shirts", "sort_order": 6},
+            {"name": "Sandals | Espadrilles", "slug": "sandals", "sort_order": 3},
+            {"name": "Bags", "slug": "bags", "sort_order": 4},
+            {"name": "Accessories", "slug": "accessories", "sort_order": 5},
+            {"name": "Dresses", "slug": "dresses", "sort_order": 6},
+            {"name": "Shirts", "slug": "shirts", "sort_order": 7},
         ]
 
         created = 0
@@ -41,7 +42,7 @@ class Command(BaseCommand):
             slug = (c.get("slug") or "").lower()[:100]
 
             if dry_run:
-                self.stdout.write(f"[dry-run] ensure Category slug={slug!r} name={name!r} for ZMall")
+                self.stdout.write(f"[dry-run] ensure Category slug={slug!r} name={name!r} for Zmall")
                 continue
 
             _, was_created = Category.objects.update_or_create(
@@ -62,4 +63,4 @@ class Command(BaseCommand):
         if dry_run:
             return
 
-        self.stdout.write(self.style.SUCCESS(f"ZMall categories seeded. Created={created}, Updated={updated}"))
+        self.stdout.write(self.style.SUCCESS(f"Zmall categories seeded. Created={created}, Updated={updated}"))

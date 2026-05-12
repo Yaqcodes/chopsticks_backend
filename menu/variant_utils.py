@@ -1,6 +1,6 @@
 """Normalise MenuItem variant dimensions for product-scoped uniqueness checks.
 
-ZMall apparel uses one ``size`` per SKU row and ``colors`` JSON. Two SKUs are
+Zmall apparel uses one ``size`` per SKU row and ``colors`` JSON. Two SKUs are
 considered duplicates within a single grouped Product only when at least one
 (size, colour) pair overlaps.
 """

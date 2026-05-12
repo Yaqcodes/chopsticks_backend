@@ -1,5 +1,5 @@
 """
-Queryset helpers for grouped Product catalog (ZMall storefront).
+Queryset helpers for grouped Product catalog (Zmall storefront).
 """
 
 from django.db.models import (
@@ -15,6 +15,7 @@ from django.db.models import (
 
 from .models import MenuItem, Product
 from .catalog_queryset import filter_queryset_by_badge
+from .size_sort import size_sort_key
 
 
 def has_purchasable_variant_subquery():
@@ -211,7 +212,7 @@ def product_filter_options_aggregate(request, restaurant_settings):
             sizes_out.add(str(size).strip())
     return {
         'colors': sorted(names, key=str.lower),
-        'sizes': sorted(sizes_out, key=str.lower),
+        'sizes': sorted(sizes_out, key=size_sort_key),
     }
 
 

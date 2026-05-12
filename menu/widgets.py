@@ -1,4 +1,4 @@
-"""Custom widgets for ZMall apparel admin."""
+"""Custom widgets for Zmall apparel admin."""
 
 import json
 
