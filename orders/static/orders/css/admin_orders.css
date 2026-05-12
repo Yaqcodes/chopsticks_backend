@@ -1,0 +1,56 @@
+.admin-order-address {
+  display: inline-block;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.change-list #changelist .results {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.change-list #changelist .results table {
+  min-width: max-content;
+}
+
+.change-list #changelist .results th,
+.change-list #changelist .results td {
+  vertical-align: middle;
+}
+
+.change-list #changelist .results td.field-delivery_address_summary,
+.change-list #changelist .results th.column-delivery_address_summary {
+  max-width: 12rem;
+  width: 12rem;
+}
+
+@media (max-width: 1024px) {
+  .change-list #changelist {
+    overflow-x: auto;
+  }
+
+  .change-list #toolbar form,
+  .change-list #changelist-form .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-order-address {
+    max-width: 12ch;
+  }
+
+  .change-list #changelist .results {
+    margin-inline: -0.5rem;
+    padding-inline: 0.5rem;
+  }
+
+  .change-list #changelist .results table {
+    font-size: 0.8125rem;
+  }
+}

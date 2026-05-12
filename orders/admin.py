@@ -65,13 +65,18 @@ def _delivery_address_for_display(order):
 
 def _delivery_address_for_changelist(order):
     if getattr(order, 'delivery_type', None) == 'pickup':
-        return 'Pickup'
+        return format_html(
+            '<span class="admin-order-address" title="Pickup">Pickup</span>'
+        )
 
     address = _delivery_address_for_display(order)
-    max_length = 72
-    if len(address) <= max_length:
-        return address
-    return f'{address[:max_length - 3]}...'
+    max_length = 24
+    label = address if len(address) <= max_length else f'{address[:max_length - 3]}...'
+    return format_html(
+        '<span class="admin-order-address" title="{}">{}</span>',
+        address,
+        label,
+    )
 
 
 class OrderItemInline(admin.TabularInline):
@@ -138,6 +143,9 @@ class OrderAdmin(admin.ModelAdmin):
     )
     
     inlines = [OrderItemInline]
+
+    class Media:
+        css = {'all': ('orders/css/admin_orders.css',)}
     
     def get_customer_name(self, obj):
         """Display customer name."""
@@ -291,6 +299,9 @@ class RoschiOrderAdmin(BusinessAdminMixin, ModelAdmin):
             'description': 'Breakdown of what the customer paid'
         }),
     )
+
+    class Media:
+        css = {'all': ('orders/css/admin_orders.css',)}
     
     def get_form(self, request, obj=None, **kwargs):
         """Add user-friendly help text to form fields."""

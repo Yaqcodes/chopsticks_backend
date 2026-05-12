@@ -23,6 +23,10 @@ from .serializers import (
 from .size_sort import size_sort_key
 
 
+def _exclude_placeholder_categories(queryset):
+    return queryset.exclude(name__iexact='None').exclude(slug__iexact='none')
+
+
 class CategoryListView(generics.ListAPIView):
     """List all active menu categories for the current business."""
     
@@ -35,10 +39,10 @@ class CategoryListView(generics.ListAPIView):
     def get_queryset(self):
         restaurant_settings = get_business_from_request(self.request)
         # Return categories for this business
-        return Category.objects.filter(
+        return _exclude_placeholder_categories(Category.objects.filter(
             is_active=True,
             restaurant_settings=restaurant_settings
-        ).distinct()
+        )).distinct()
 
 
 class CategoryDetailView(generics.RetrieveAPIView):
@@ -50,10 +54,10 @@ class CategoryDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         restaurant_settings = get_business_from_request(self.request)
         # Return categories for this business
-        return Category.objects.filter(
+        return _exclude_placeholder_categories(Category.objects.filter(
             is_active=True,
             restaurant_settings=restaurant_settings
-        ).distinct()
+        )).distinct()
 
 
 class MenuItemListView(generics.ListAPIView):
@@ -198,11 +202,11 @@ def menu_by_category(request, category_id):
     restaurant_settings = get_business_from_request(request)
     try:
         # Validate category belongs to this business
-        category = Category.objects.get(
+        category = _exclude_placeholder_categories(Category.objects.filter(
             id=category_id,
             is_active=True,
             restaurant_settings=restaurant_settings
-        )
+        )).get()
     except Category.DoesNotExist:
         return Response({'error': 'Category not found.'}, status=status.HTTP_404_NOT_FOUND)
     
