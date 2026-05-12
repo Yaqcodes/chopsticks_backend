@@ -375,10 +375,10 @@ CHOPSTICKS_UNFOLD = {
     },
 }
 
-# ZMall Unfold settings (clothing & apparel – white primary, black secondary)
+# Zmall Unfold settings (clothing & apparel – white primary, black secondary)
 ZMALL_UNFOLD = {
-    "SITE_TITLE": "ZMall Admin",
-    "SITE_HEADER": "ZMall",
+    "SITE_TITLE": "Zmall Admin",
+    "SITE_HEADER": "Zmall",
     "SITE_URL": "/zmall-admin/",
     "COLORS": {
         "primary": {

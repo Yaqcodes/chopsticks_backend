@@ -413,25 +413,16 @@ class UnifiedOrderSerializer(serializers.ModelSerializer):
             validated_data['guest_phone'] = customer_phone
             validated_data['user'] = None
         
-        # For delivery orders, store the address text in special_instructions if no address ID
-        if validated_data.get('delivery_type') == 'delivery' and delivery_address_text:
-            current_instructions = validated_data.get('special_instructions', '')
-            address_info = f"Delivery Address: {delivery_address_text}"
-            
-            # Add order note if provided
-            if order_note:
-                address_info = f"{address_info}\n\nOrder Note: {order_note}"
-            
-            if current_instructions:
-                validated_data['special_instructions'] = f"{current_instructions}\n\n{address_info}"
-            else:
-                validated_data['special_instructions'] = address_info
-        elif order_note:
-            # If no delivery address but order note exists, add it to special instructions
-            current_instructions = validated_data.get('special_instructions', '')
-            if current_instructions:
+        if validated_data.get('delivery_type') == 'delivery':
+            validated_data['delivery_address'] = delivery_address_text
+        else:
+            validated_data['delivery_address'] = ''
+
+        if order_note:
+            current_instructions = (validated_data.get('special_instructions') or '').strip()
+            if current_instructions and order_note not in current_instructions:
                 validated_data['special_instructions'] = f"{current_instructions}\n\nOrder Note: {order_note}"
-            else:
+            elif not current_instructions:
                 validated_data['special_instructions'] = f"Order Note: {order_note}"
         
         # Create the order with calculated totals

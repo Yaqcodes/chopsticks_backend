@@ -1,6 +1,6 @@
 """
-Create a staff user for ZMall admin (not a superuser).
-User can access /zmall-admin/ only; linked via User.businesses to ZMall RestaurantSettings.
+Create a staff user for Zmall admin (not a superuser).
+User can access /zmall-admin/ only; linked via User.businesses to Zmall RestaurantSettings.
 """
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
@@ -9,13 +9,13 @@ from core.models import RestaurantSettings
 User = get_user_model()
 
 EMAIL = "info.zmallng@gmail.com"
-FIRST_NAME = "ZMall"
+FIRST_NAME = "Zmall"
 LAST_NAME = "Admin"
 DEFAULT_PASSWORD = "YNWA/cr7"
 
 
 class Command(BaseCommand):
-    help = "Create a staff user for ZMall admin (is_staff=True, is_superuser=False), linked to ZMall business."
+    help = "Create a staff user for Zmall admin (is_staff=True, is_superuser=False), linked to Zmall business."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -31,7 +31,7 @@ class Command(BaseCommand):
         if not zmall:
             self.stderr.write(
                 self.style.ERROR(
-                    "ZMall tenant not found. Create a RestaurantSettings with domain containing 'zmall' (e.g. zmall.ng)."
+                    "Zmall tenant not found. Create a RestaurantSettings with domain containing 'zmall' (e.g. zmall.ng)."
                 )
             )
             return
@@ -60,12 +60,12 @@ class Command(BaseCommand):
 
         if not user.businesses.filter(id=zmall.id).exists():
             user.businesses.add(zmall)
-            self.stdout.write(self.style.SUCCESS(f"Linked user to ZMall business (id={zmall.id})."))
+            self.stdout.write(self.style.SUCCESS(f"Linked user to Zmall business (id={zmall.id})."))
 
         if created:
-            self.stdout.write(self.style.SUCCESS(f"Created ZMall admin user: {EMAIL}"))
+            self.stdout.write(self.style.SUCCESS(f"Created Zmall admin user: {EMAIL}"))
         else:
-            self.stdout.write(self.style.SUCCESS(f"Updated ZMall admin user: {EMAIL}"))
+            self.stdout.write(self.style.SUCCESS(f"Updated Zmall admin user: {EMAIL}"))
 
         self.stdout.write(f"  Login at: /zmall-admin/")
         self.stdout.write(f"  Email: {EMAIL}")

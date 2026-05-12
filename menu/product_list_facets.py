@@ -11,6 +11,7 @@ from decimal import Decimal
 from django.conf import settings
 
 from .models import MenuItem
+from .size_sort import size_sort_key
 
 
 def _media_url(path):
@@ -37,7 +38,7 @@ def _colors_from_json(colors):
 
 
 def _sizes_from_row(size):
-    """ZMall SKU size comes only from ``MenuItem.size`` (one value per variant row)."""
+    """Zmall SKU size comes only from ``MenuItem.size`` (one value per variant row)."""
     if size is not None and str(size).strip():
         return [str(size).strip()]
     return []
@@ -140,9 +141,9 @@ def bulk_attach_variant_facets_for_products(products):
 
     for p in products:
         pid = p.pk
-        p._list_facet_sizes = sorted(sizes_by[pid].values(), key=lambda x: str(x).lower())
+        p._list_facet_sizes = sorted(sizes_by[pid].values(), key=size_sort_key)
         p._list_facet_colors = sorted(colors_by[pid].values(), key=lambda x: str(x.get('name', '')).lower())
         p._list_variant_cards = sorted(
             variants_by[pid],
-            key=lambda x: (str(x.get('size') or '').lower(), x['id']),
+            key=lambda x: (size_sort_key(x.get('size')), x['id']),
         )

@@ -231,14 +231,14 @@ class ChopsticksAdminSite(BusinessAdminSite):
 
 
 class ZmallAdminSite(BusinessAdminSite):
-    """Custom admin site for ZMall (clothing & apparel) management."""
+    """Custom admin site for Zmall (clothing & apparel) management."""
     
     def __init__(self, name='zmall_admin', **kwargs):
         super().__init__(
             name=name,
             business_identifier='zmall',
-            site_title="ZMall Admin",
-            site_header="ZMall",
+            site_title="Zmall Admin",
+            site_header="Zmall",
             index_title="Dashboard",
             **kwargs
         )
@@ -258,6 +258,6 @@ chopsticks_admin_site.site_title = "Chopsticks & Bowls Admin"
 chopsticks_admin_site.site_header = "Chopsticks & Bowls"
 chopsticks_admin_site.index_title = "Dashboard"
 
-zmall_admin_site.site_title = "ZMall Admin"
-zmall_admin_site.site_header = "ZMall"
+zmall_admin_site.site_title = "Zmall Admin"
+zmall_admin_site.site_header = "Zmall"
 zmall_admin_site.index_title = "Dashboard"

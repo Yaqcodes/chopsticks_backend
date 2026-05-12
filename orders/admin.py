@@ -48,6 +48,32 @@ def _order_item_inline_all_readonly():
     return ('menu_item', 'quantity', 'unit_price', 'total_price', 'special_instructions')
 
 
+def _delivery_address_for_display(order):
+    address = (getattr(order, 'delivery_address', None) or '').strip()
+    if address:
+        return address
+
+    instructions = (getattr(order, 'special_instructions', None) or '').strip()
+    marker = 'Delivery Address:'
+    if marker not in instructions:
+        return 'Not provided'
+
+    after_marker = instructions.split(marker, 1)[1].strip()
+    legacy_address = after_marker.split('\n\n', 1)[0].strip()
+    return legacy_address or 'Not provided'
+
+
+def _delivery_address_for_changelist(order):
+    if getattr(order, 'delivery_type', None) == 'pickup':
+        return 'Pickup'
+
+    address = _delivery_address_for_display(order)
+    max_length = 72
+    if len(address) <= max_length:
+        return address
+    return f'{address[:max_length - 3]}...'
+
+
 class OrderItemInline(admin.TabularInline):
     """Inline admin for order items."""
     
@@ -73,7 +99,8 @@ class OrderAdmin(admin.ModelAdmin):
     """Admin interface for Order model."""
     
     list_display = [
-        'order_number', 'restaurant_settings', 'get_customer_name', 'delivery_type', 'status', 
+        'order_number', 'restaurant_settings', 'get_customer_name', 'delivery_type',
+        'delivery_address_summary', 'status',
         'payment_status', 'total_amount', 'created_at'
     ]
     list_filter = [
@@ -86,7 +113,7 @@ class OrderAdmin(admin.ModelAdmin):
     ordering = ['-created_at']
     readonly_fields = [
         'order_number', 'subtotal', 'tax_amount', 'total_amount', 
-        'created_at', 'updated_at'
+        'created_at', 'updated_at', 'delivery_address_display'
     ]
     
     fieldsets = (
@@ -97,7 +124,7 @@ class OrderAdmin(admin.ModelAdmin):
             'fields': ('guest_email', 'guest_name', 'guest_phone')
         }),
         ('Delivery Details', {
-            'fields': ('delivery_address', 'delivery_type', 'special_instructions')
+            'fields': ('delivery_address_display', 'delivery_type', 'special_instructions')
         }),
         ('Pricing', {
             'fields': ('subtotal', 'tax_amount', 'delivery_fee', 'discount_amount', 'total_amount')
@@ -116,6 +143,14 @@ class OrderAdmin(admin.ModelAdmin):
         """Display customer name."""
         return obj.get_customer_name()
     get_customer_name.short_description = 'Customer'
+
+    def delivery_address_display(self, obj):
+        return _delivery_address_for_display(obj)
+    delivery_address_display.short_description = 'Delivery Address'
+
+    def delivery_address_summary(self, obj):
+        return _delivery_address_for_changelist(obj)
+    delivery_address_summary.short_description = 'Delivery Address'
     
     def get_queryset(self, request):
         """Optimize queryset with select_related for better performance."""
@@ -222,8 +257,9 @@ class RoschiOrderAdmin(BusinessAdminMixin, ModelAdmin):
     """Orders - View and manage customer orders."""
     
     list_display = [
-        'order_number', 'get_customer_name', 'get_customer_phone', 'total_amount_display', 
-        'order_status_display', 'payment_status_display', 'order_date'
+        'order_number', 'get_customer_name', 'get_customer_phone',
+        'delivery_address_summary', 'total_amount_display', 'order_status_display',
+        'payment_status_display', 'order_date'
     ]
     list_filter = [
         'status', 'payment_status', 'created_at'
@@ -234,7 +270,7 @@ class RoschiOrderAdmin(BusinessAdminMixin, ModelAdmin):
     ordering = ['-created_at']
     readonly_fields = [
         'order_number', 'subtotal', 'tax_amount', 'total_amount', 
-        'created_at', 'updated_at', 'paystack_reference'
+        'created_at', 'updated_at', 'paystack_reference', 'delivery_address_display'
     ]
     
     fieldsets = (
@@ -247,7 +283,7 @@ class RoschiOrderAdmin(BusinessAdminMixin, ModelAdmin):
             'description': 'Contact information for the customer'
         }),
         ('Where to Deliver', {
-            'fields': ('delivery_address',),
+            'fields': ('delivery_address_display',),
             'description': 'The address where the order should be delivered'
         }),
         ('Order Total', {
@@ -278,10 +314,6 @@ class RoschiOrderAdmin(BusinessAdminMixin, ModelAdmin):
         if 'guest_phone' in form.base_fields:
             form.base_fields['guest_phone'].label = 'Customer Phone Number'
         
-        if 'delivery_address' in form.base_fields:
-            form.base_fields['delivery_address'].label = 'Delivery Address'
-            form.base_fields['delivery_address'].help_text = 'Full address where the order should be delivered'
-        
         return form
     
     inlines = [RoschiOrderItemInline]
@@ -290,6 +322,14 @@ class RoschiOrderAdmin(BusinessAdminMixin, ModelAdmin):
         """Customer's full name."""
         return obj.get_customer_name() or 'Guest Customer'
     get_customer_name.short_description = 'Customer Name'
+
+    def delivery_address_display(self, obj):
+        return _delivery_address_for_display(obj)
+    delivery_address_display.short_description = 'Delivery Address'
+
+    def delivery_address_summary(self, obj):
+        return _delivery_address_for_changelist(obj)
+    delivery_address_summary.short_description = 'Delivery Address'
     
     def get_customer_phone(self, obj):
         """Customer's phone number."""

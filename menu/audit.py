@@ -17,7 +17,7 @@ def log_product_variant_link(
     """
     Persist link/unlink to ProductVariantLinkEvent.
 
-    ``restaurant_settings`` overrides tenant resolution (e.g. ZMall admin may not
+    ``restaurant_settings`` overrides tenant resolution (e.g. Zmall admin may not
     send the storefront Origin header).
     """
     rs = restaurant_settings or get_business_from_request(request)

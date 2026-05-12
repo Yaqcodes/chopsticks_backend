@@ -6,7 +6,7 @@ from rest_framework.response import Response
 
 class MenuItemPageNumberPagination(PageNumberPagination):
     """
-    ZMall catalog expects a stable page size (default 25) and sends ?page_size= from the app.
+    Zmall catalog expects a stable page size (default 25) and sends ?page_size= from the app.
     DRF's default PageNumberPagination ignores page_size unless page_size_query_param is set.
     """
 
