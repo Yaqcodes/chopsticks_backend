@@ -140,6 +140,10 @@ def _apply_product_price_band(qs, band):
         return qs.filter(_min_variant_price__gte=50000, _min_variant_price__lte=100000)
     if band == '100000-200000':
         return qs.filter(_min_variant_price__gte=100000, _min_variant_price__lte=200000)
+    if band == '200000-300000':
+        return qs.filter(_min_variant_price__gte=200000, _min_variant_price__lte=300000)
+    if band == '300000-':
+        return qs.filter(_min_variant_price__gte=300000)
     if band == '200000-':
         return qs.filter(_min_variant_price__gte=200000)
     return qs

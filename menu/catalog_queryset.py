@@ -51,6 +51,10 @@ def _apply_price_band_on_annotated(qs, band):
         return qs.filter(effective_price__gte=50000, effective_price__lte=100000)
     if band == '100000-200000':
         return qs.filter(effective_price__gte=100000, effective_price__lte=200000)
+    if band == '200000-300000':
+        return qs.filter(effective_price__gte=200000, effective_price__lte=300000)
+    if band == '300000-':
+        return qs.filter(effective_price__gte=300000)
     if band == '200000-':
         return qs.filter(effective_price__gte=200000)
     return qs

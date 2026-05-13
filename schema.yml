@@ -1049,7 +1049,7 @@ paths:
       - in: query
         name: price_band
         required: false
-        description: 'Effective price band: 0-50000, 50000-100000, 100000-200000, or 200000-.'
+        description: 'Effective price band: 0-50000, 50000-100000, 100000-200000, 200000-300000, or 300000- (open-ended).'
         schema:
           type: string
       - in: query
