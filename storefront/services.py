@@ -5,7 +5,7 @@ from decimal import Decimal
 from django.db.models import Prefetch
 
 from core.models import CatalogListingMode
-from menu.models import MenuItem, Product, ProductImage
+from menu.models import MenuItem, MenuItemImage, Product, ProductImage
 from menu.product_catalog import (
     annotate_products_min_variant_price,
     has_purchasable_variant_subquery,
@@ -24,6 +24,93 @@ def _decimal_price(value):
     return str(value)
 
 
+def _url_from_image_field(filefield):
+    if not filefield:
+        return None
+    name = getattr(filefield, 'name', None)
+    if name:
+        return _media_url(name)
+    raw = str(filefield).strip()
+    return _media_url(raw) if raw else None
+
+
+def _url_from_legacy_images_list(images):
+    """MenuItem.images JSON may hold paths or URLs."""
+    if not images or not isinstance(images, list):
+        return None
+    for entry in images:
+        if not entry or not isinstance(entry, str):
+            continue
+        s = entry.strip()
+        if not s:
+            continue
+        if s.startswith('http://') or s.startswith('https://'):
+            return s
+        return _media_url(s.lstrip('/'))
+    return None
+
+
+def _menu_item_image_url(menu_item):
+    """Primary image, then extra_images, then legacy JSON — same order as MenuItemDetailSerializer."""
+    url = _url_from_image_field(menu_item.image)
+    if url:
+        return url
+    extra_qs = getattr(menu_item, 'extra_images', None)
+    if extra_qs is not None:
+        for extra in extra_qs.all().order_by('sort_order', 'id'):
+            url = _url_from_image_field(extra.image)
+            if url:
+                return url
+    return _url_from_legacy_images_list(menu_item.images)
+
+
+def _product_variant_queryset():
+    return (
+        MenuItem.objects.filter(is_available=True, sku__gte=1)
+        .prefetch_related(
+            Prefetch(
+                'extra_images',
+                queryset=MenuItemImage.objects.order_by('sort_order', 'id'),
+            ),
+        )
+        .order_by('size', 'id')
+    )
+
+
+def resolve_product_image_url(product):
+    """
+    Grouped Product (Zmall): gallery, then linked variant SKUs (with extras / legacy).
+    """
+    gallery = getattr(product, 'gallery_images', None)
+    if gallery is not None:
+        for gi in gallery.all().order_by('sort_order', 'id'):
+            url = _url_from_image_field(gi.image)
+            if url:
+                return url
+    else:
+        for gi in ProductImage.objects.filter(product_id=product.pk).order_by('sort_order', 'id'):
+            url = _url_from_image_field(gi.image)
+            if url:
+                return url
+
+    variants = getattr(product, 'variants', None)
+    if variants is not None:
+        variant_rows = variants.all()
+    else:
+        variant_rows = _product_variant_queryset().filter(product_id=product.pk)
+
+    for variant in variant_rows:
+        url = _menu_item_image_url(variant)
+        if url:
+            return url
+    return None
+
+
+def resolve_menu_item_image_url(menu_item):
+    """Menu-item tenants: single SKU row image resolution."""
+    return _menu_item_image_url(menu_item)
+
+
 def _item_from_product(product):
     data = ProductListSerializer(product).data
     price = data.get('min_variant_price')
@@ -33,7 +120,7 @@ def _item_from_product(product):
         'ref_type': 'product',
         'ref_id': product.id,
         'name': data.get('name') or product.name,
-        'image_url': data.get('image'),
+        'image_url': resolve_product_image_url(product),
         'price': _decimal_price(price),
         'detail_path': f'/product/{product.id}',
     }
@@ -48,7 +135,7 @@ def _item_from_menu_item(menu_item):
         'ref_type': 'menu_item',
         'ref_id': menu_item.id,
         'name': data.get('name') or menu_item.name,
-        'image_url': data.get('image'),
+        'image_url': resolve_menu_item_image_url(menu_item),
         'price': _decimal_price(price),
         'detail_path': f'/item/{menu_item.id}',
     }
@@ -94,6 +181,10 @@ def _load_products_for_links(product_ids, restaurant_settings):
             'gallery_images',
             queryset=ProductImage.objects.order_by('sort_order', 'id'),
         ),
+        Prefetch(
+            'variants',
+            queryset=_product_variant_queryset(),
+        ),
     )
     products = list(qs)
     bulk_attach_variant_facets_for_products(products)
@@ -103,12 +194,21 @@ def _load_products_for_links(product_ids, restaurant_settings):
 def _load_menu_items_for_links(menu_item_ids, restaurant_settings):
     if not menu_item_ids:
         return {}
-    qs = MenuItem.objects.filter(
-        id__in=menu_item_ids,
-        restaurant_settings=restaurant_settings,
-        is_available=True,
-        sku__gte=1,
-    ).select_related('category')
+    qs = (
+        MenuItem.objects.filter(
+            id__in=menu_item_ids,
+            restaurant_settings=restaurant_settings,
+            is_available=True,
+            sku__gte=1,
+        )
+        .select_related('category')
+        .prefetch_related(
+            Prefetch(
+                'extra_images',
+                queryset=MenuItemImage.objects.order_by('sort_order', 'id'),
+            ),
+        )
+    )
     return {m.id: m for m in qs}
 
 
