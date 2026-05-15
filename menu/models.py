@@ -12,6 +12,12 @@ class Category(models.Model):
     """Menu category model. Business-specific."""
 
     name = models.CharField(max_length=100)
+    display_name = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        help_text='Optional label for nav and category pages. Leave blank to use Name.',
+    )
     slug = models.SlugField(max_length=100, blank=True, null=True)
     description = models.TextField(blank=True)
     image = models.ImageField(upload_to='categories/', blank=True, null=True)
@@ -47,6 +53,11 @@ class Category(models.Model):
     
     def __str__(self):
         return self.name
+
+    def get_storefront_name(self):
+        """Public label: display_name when set, otherwise name."""
+        label = (self.display_name or '').strip()
+        return label or self.name
 
 
 class Product(models.Model):

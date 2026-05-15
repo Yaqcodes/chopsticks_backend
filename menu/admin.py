@@ -135,6 +135,7 @@ class CategoryAdmin(admin.ModelAdmin):
         (None, {
             'fields': (
                 'name',
+                'display_name',
                 'slug',
                 'description',
                 'image',
@@ -489,6 +490,7 @@ class ZmallCategoryForm(forms.ModelForm):
         model = Category
         fields = [
             'name',
+            'display_name',
             'description',
             'image',
             'show_in_men',
@@ -498,8 +500,17 @@ class ZmallCategoryForm(forms.ModelForm):
             'sort_order',
         ]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['display_name'].required = False
+        self.fields['display_name'].help_text = (
+            'Optional. Shown in the menu and category pages instead of Name when set.'
+        )
+
     def clean(self):
         cleaned = super().clean()
+        if cleaned.get('display_name'):
+            cleaned['display_name'] = str(cleaned['display_name']).strip()
         if not any(
             cleaned.get(flag)
             for flag in ('show_in_men', 'show_in_women', 'show_in_unisex')
@@ -525,6 +536,7 @@ class ZmallCategoryAdmin(BusinessAdminMixin, ModelAdmin):
         (None, {
             'fields': (
                 'name',
+                'display_name',
                 'show_in_men',
                 'show_in_women',
                 'show_in_unisex',

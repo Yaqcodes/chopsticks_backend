@@ -15,6 +15,21 @@ def _media_url(path):
     return f"{base}/{path}" if path else None
 
 
+def _category_storefront_name(category):
+    if not category:
+        return ''
+    return category.get_storefront_name()
+
+
+class CategoryStorefrontNameMixin:
+    """Expose category label using optional display_name."""
+
+    category_name = serializers.SerializerMethodField()
+
+    def get_category_name(self, obj):
+        return _category_storefront_name(getattr(obj, 'category', None))
+
+
 def _normalize_colors(colors):
     """Return list of { name, hex } for frontend. Name defaults to hex when empty."""
     if not colors or not isinstance(colors, list):
@@ -65,15 +80,18 @@ def _distinct_variant_colors(product):
 
 class CategorySerializer(serializers.ModelSerializer):
     """Serializer for menu categories."""
-    
+
     menu_items_count = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
-    
+    label = serializers.SerializerMethodField()
+
     class Meta:
         model = Category
         fields = [
             'id',
             'name',
+            'display_name',
+            'label',
             'slug',
             'description',
             'image',
@@ -84,6 +102,9 @@ class CategorySerializer(serializers.ModelSerializer):
             'sort_order',
             'menu_items_count',
         ]
+
+    def get_label(self, obj):
+        return obj.get_storefront_name()
     
     def get_image(self, obj):
         return _media_url(obj.image) if obj.image else None
@@ -93,10 +114,9 @@ class CategorySerializer(serializers.ModelSerializer):
         return obj.menu_items.filter(is_available=True).count()
 
 
-class MenuItemSerializer(serializers.ModelSerializer):
+class MenuItemSerializer(CategoryStorefrontNameMixin, serializers.ModelSerializer):
     """Serializer for menu items."""
-    
-    category_name = serializers.CharField(source='category.name', read_only=True)
+
     category_id = serializers.IntegerField(source='category.id', read_only=True)
     category_slug = serializers.SlugField(source='category.slug', read_only=True, allow_null=True)
     badges_display = serializers.SerializerMethodField()
@@ -158,10 +178,9 @@ class MenuItemDetailSerializer(MenuItemSerializer):
         return urls
 
 
-class FeaturedItemsSerializer(serializers.ModelSerializer):
+class FeaturedItemsSerializer(CategoryStorefrontNameMixin, serializers.ModelSerializer):
     """Serializer for featured menu items."""
-    
-    category_name = serializers.CharField(source='category.name', read_only=True)
+
     formatted_price = serializers.CharField(read_only=True)
     effective_price = serializers.SerializerMethodField()
     badges_display = serializers.SerializerMethodField()
@@ -197,10 +216,9 @@ class FeaturedItemsSerializer(serializers.ModelSerializer):
         return obj.get_badges_display()
 
 
-class MenuSearchSerializer(serializers.ModelSerializer):
+class MenuSearchSerializer(CategoryStorefrontNameMixin, serializers.ModelSerializer):
     """Serializer for menu search results."""
-    
-    category_name = serializers.CharField(source='category.name', read_only=True)
+
     formatted_price = serializers.CharField(read_only=True)
     effective_price = serializers.SerializerMethodField()
     badges_display = serializers.SerializerMethodField()
@@ -240,6 +258,7 @@ class CategoryWriteSerializer(serializers.ModelSerializer):
         model = Category
         fields = [
             'name',
+            'display_name',
             'description',
             'image',
             'show_in_men',
@@ -377,8 +396,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         return urls
 
 
-class ProductListSerializer(serializers.ModelSerializer):
-    category_name = serializers.CharField(source='category.name', read_only=True)
+class ProductListSerializer(CategoryStorefrontNameMixin, serializers.ModelSerializer):
     category_id = serializers.IntegerField(source='category.id', read_only=True)
     category_slug = serializers.SlugField(source='category.slug', read_only=True, allow_null=True)
     image = serializers.SerializerMethodField()
