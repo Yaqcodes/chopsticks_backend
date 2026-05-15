@@ -1,14 +1,14 @@
 """
-Seed Zmall shop_the_look spotlight posts from zmall-frontend staticMarketing INSTAGRAM_POSTS.
+Seed Zmall shop_the_look spotlight posts (metadata + product links).
 
-Copies lifestyle images into MEDIA_ROOT/spotlights/ and links catalog Products
-(ids from static data; resolves MenuItem ids to Product when needed).
+Expects lifestyle images already on the server under MEDIA_ROOT/storefront/
+(default). Does not read from the frontend repo or copy files.
 """
 
 from pathlib import Path
+from typing import Optional
 
 from django.conf import settings
-from django.core.files import File
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -16,8 +16,10 @@ from core.models import CatalogListingMode, RestaurantSettings
 from menu.models import MenuItem, Product
 from storefront.models import SpotlightPlacement, SpotlightPost, SpotlightPostLink
 
-# Mirrors zmall-frontend/src/data/staticMarketing.js INSTAGRAM_POSTS
-STATIC_INSTAGRAM_POSTS = [
+DEFAULT_MEDIA_SUBDIR = 'storefront'
+
+# Canonical shop-the-look rows (image filename must exist under the images directory).
+SHOP_THE_LOOK_POSTS = [
     {
         'sort_order': 1,
         'image': 'him_top.jpg',
@@ -94,13 +96,16 @@ STATIC_INSTAGRAM_POSTS = [
 
 
 class Command(BaseCommand):
-    help = 'Seed shop_the_look spotlight posts for Zmall from frontend static INSTAGRAM_POSTS data.'
+    help = (
+        'Seed shop_the_look spotlight posts for Zmall using images already in '
+        f'MEDIA_ROOT/{DEFAULT_MEDIA_SUBDIR}/ (or --images-dir).'
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
             '--dry-run',
             action='store_true',
-            help='Print actions without writing to the database or copying files.',
+            help='Print actions without writing to the database.',
         )
         parser.add_argument(
             '--replace',
@@ -108,10 +113,13 @@ class Command(BaseCommand):
             help='Delete existing Zmall shop_the_look spotlight posts before seeding.',
         )
         parser.add_argument(
-            '--assets-dir',
+            '--images-dir',
             type=str,
             default='',
-            help='Override path to Instagram Picks folder (default: ../zmall-frontend/src/assets/Instagram Picks).',
+            help=(
+                f'Directory containing spotlight image files '
+                f'(default: {{MEDIA_ROOT}}/{DEFAULT_MEDIA_SUBDIR}/).'
+            ),
         )
 
     def handle(self, *args, **options):
@@ -131,14 +139,19 @@ class Command(BaseCommand):
                 )
             )
 
-        assets_dir = self._assets_dir(options['assets_dir'])
-        if not assets_dir.is_dir():
-            self.stderr.write(self.style.ERROR(f'Assets directory not found: {assets_dir}'))
+        images_dir = self._images_dir(options['images_dir'])
+        if not images_dir.is_dir():
+            self.stderr.write(
+                self.style.ERROR(
+                    f'Images directory not found: {images_dir}\n'
+                    f'Upload files to MEDIA_ROOT/{DEFAULT_MEDIA_SUBDIR}/ on this server, '
+                    'or pass --images-dir.'
+                )
+            )
             return
 
-        media_spotlights = Path(settings.MEDIA_ROOT) / 'spotlights'
-        if not dry_run:
-            media_spotlights.mkdir(parents=True, exist_ok=True)
+        file_index = self._build_file_index(images_dir)
+        media_subdir = self._media_subdir_for_dir(images_dir)
 
         if replace and not dry_run:
             deleted, _ = SpotlightPost.objects.filter(
@@ -150,12 +163,18 @@ class Command(BaseCommand):
         created_posts = 0
         created_links = 0
         skipped_links = 0
+        missing_images = 0
 
         with transaction.atomic():
-            for row in STATIC_INSTAGRAM_POSTS:
-                src = assets_dir / row['image']
-                if not src.is_file():
-                    self.stderr.write(self.style.ERROR(f'Missing image: {src}'))
+            for row in SHOP_THE_LOOK_POSTS:
+                image_path = self._resolve_image_path(file_index, row['image'])
+                if image_path is None:
+                    missing_images += 1
+                    self.stderr.write(
+                        self.style.ERROR(
+                            f"Missing image '{row['image']}' in {images_dir}"
+                        )
+                    )
                     continue
 
                 product_ids = self._resolve_product_ids(zmall, row['product_ids'])
@@ -167,14 +186,16 @@ class Command(BaseCommand):
                         )
                     )
 
+                rel_name = f'{media_subdir}/{image_path.name}'.replace('\\', '/')
+
                 if dry_run:
                     self.stdout.write(
-                        f"[dry-run] Spotlight sort_order={row['sort_order']} "
-                        f"image={src.name} products={product_ids} url={row['external_url'][:50]}..."
+                        f"[dry-run] sort_order={row['sort_order']} image={rel_name} "
+                        f"products={product_ids}"
                     )
                     continue
 
-                post = SpotlightPost(
+                post = SpotlightPost.objects.create(
                     restaurant_settings=zmall,
                     external_url=row['external_url'],
                     cta_label='Shop the look',
@@ -182,11 +203,8 @@ class Command(BaseCommand):
                     sort_order=row['sort_order'],
                     is_active=True,
                 )
-                post.save()
-
-                with src.open('rb') as fh:
-                    post.image.save(src.name, File(fh), save=True)
-
+                post.image.name = rel_name
+                post.save(update_fields=['image'])
                 created_posts += 1
 
                 for link_order, product_id in enumerate(product_ids):
@@ -204,33 +222,48 @@ class Command(BaseCommand):
 
         if dry_run:
             self.stdout.write(self.style.SUCCESS('Dry run complete (no changes saved).'))
-        else:
+            return
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f'Seeded {created_posts} spotlight post(s), {created_links} product link(s) '
+                f'(images from {images_dir}).'
+            )
+        )
+        if missing_images:
+            self.stdout.write(self.style.ERROR(f'{missing_images} post(s) skipped (missing images).'))
+        if skipped_links:
             self.stdout.write(
-                self.style.SUCCESS(
-                    f'Seeded {created_posts} spotlight post(s), {created_links} product link(s). '
-                    f'Images under {media_spotlights}.'
+                self.style.WARNING(
+                    f'{skipped_links} static product id(s) could not be resolved to Products.'
                 )
             )
-            if skipped_links:
-                self.stdout.write(
-                    self.style.WARNING(
-                        f'{skipped_links} static product id(s) could not be resolved to Products.'
-                    )
-                )
 
-    def _assets_dir(self, override: str) -> Path:
+    def _images_dir(self, override: str) -> Path:
         if override:
             return Path(override).expanduser().resolve()
-        return (
-            Path(settings.BASE_DIR).parent
-            / 'zmall-frontend'
-            / 'src'
-            / 'assets'
-            / 'Instagram Picks'
-        ).resolve()
+        return (Path(settings.MEDIA_ROOT) / DEFAULT_MEDIA_SUBDIR).resolve()
+
+    def _media_subdir_for_dir(self, images_dir: Path) -> str:
+        """Relative path under MEDIA_ROOT for ImageField.name (e.g. storefront)."""
+        media_root = Path(settings.MEDIA_ROOT).resolve()
+        try:
+            rel = images_dir.relative_to(media_root)
+            return str(rel).replace('\\', '/')
+        except ValueError:
+            return DEFAULT_MEDIA_SUBDIR
+
+    def _build_file_index(self, images_dir: Path) -> dict[str, Path]:
+        index = {}
+        for path in images_dir.iterdir():
+            if path.is_file():
+                index[path.name.lower()] = path
+        return index
+
+    def _resolve_image_path(self, file_index, filename: str) -> Optional[Path]:
+        return file_index.get(filename.lower())
 
     def _resolve_product_ids(self, zmall, raw_ids):
-        """Map static ids to Product PKs for this tenant (Product id or linked MenuItem)."""
         resolved = []
         seen = set()
         for raw_id in raw_ids:
@@ -241,10 +274,7 @@ class Command(BaseCommand):
         return resolved
 
     def _resolve_one_product_id(self, zmall, raw_id):
-        product = Product.objects.filter(
-            id=raw_id,
-            restaurant_settings=zmall,
-        ).first()
+        product = Product.objects.filter(id=raw_id, restaurant_settings=zmall).first()
         if product:
             return product.id
 
