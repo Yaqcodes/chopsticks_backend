@@ -1,3 +1,5 @@
+# Ensures upload_to stays spotlights/ (reverts mistaken storefront/ if that was applied).
+
 from django.db import migrations, models
 
 
@@ -11,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='spotlightpost',
             name='image',
-            field=models.ImageField(upload_to='storefront/'),
+            field=models.ImageField(upload_to='spotlights/'),
         ),
     ]

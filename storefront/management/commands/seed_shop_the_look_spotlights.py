@@ -1,7 +1,7 @@
 """
 Seed Zmall shop_the_look spotlight posts (metadata + product links).
 
-Expects lifestyle images already on the server under MEDIA_ROOT/storefront/
+Expects lifestyle images already on the server under MEDIA_ROOT/spotlights/
 (default). Does not read from the frontend repo or copy files.
 """
 
@@ -16,7 +16,7 @@ from core.models import CatalogListingMode, RestaurantSettings
 from menu.models import MenuItem, Product
 from storefront.models import SpotlightPlacement, SpotlightPost, SpotlightPostLink
 
-DEFAULT_MEDIA_SUBDIR = 'storefront'
+DEFAULT_MEDIA_SUBDIR = 'spotlights'
 
 # Canonical shop-the-look rows (image filename must exist under the images directory).
 SHOP_THE_LOOK_POSTS = [
