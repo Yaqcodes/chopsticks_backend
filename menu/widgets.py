@@ -1,6 +1,7 @@
 """Custom widgets for Zmall apparel admin."""
 
 import json
+import re
 
 from django import forms
 from django.utils.html import escape
@@ -103,16 +104,42 @@ class ColorPickerWidget(forms.Widget):
                 if (colorInput && displayInput) displayInput.value = colorInput.value;
             }}
 
-            container.querySelectorAll('.color-row').forEach(function(row) {{
+            function bindRow(row) {{
                 var colorInput = row.querySelector('input[type="color"]');
                 if (colorInput) {{
                     colorInput.addEventListener('input', function() {{ syncHexDisplay(row); }});
                     syncHexDisplay(row);
                 }}
-                row.querySelector('.color-remove').addEventListener('click', function() {{
-                    row.remove();
+                var removeBtn = row.querySelector('.color-remove');
+                if (removeBtn) {{
+                    removeBtn.addEventListener('click', function() {{
+                        row.remove();
+                        reindexRows();
+                    }});
+                }}
+            }}
+
+            function reindexRows() {{
+                var rows = rowsContainer.querySelectorAll('.color-row');
+                rows.forEach(function(row, i) {{
+                    row.setAttribute('data-index', i);
+                    var nameInput = row.querySelector('input[type="text"]:not([readonly])');
+                    var hexInput = row.querySelector('input[type="color"]');
+                    var displayInput = row.querySelector('input[readonly]');
+                    if (nameInput) nameInput.name = nameBase + '_name_' + i;
+                    if (hexInput) {{
+                        hexInput.name = nameBase + '_hex_' + i;
+                        if (displayInput) {{
+                            displayInput.name = nameBase + '_hex_display_' + i;
+                            displayInput.setAttribute('data-hex-target', nameBase + '_hex_' + i);
+                        }}
+                    }}
                 }});
-            }});
+                idx = rows.length;
+            }}
+
+            container.querySelectorAll('.color-row').forEach(bindRow);
+            reindexRows();
 
             if (addBtn) {{
                 addBtn.addEventListener('click', function() {{
@@ -128,11 +155,8 @@ class ColorPickerWidget(forms.Widget):
                         '<input type="text" name="' + nameBase + '_hex_display_' + idx + '" value="#000000" readonly class="' + textCls + '" style="max-width:5.5rem;margin-left:4px;font-size:11px;vertical-align:middle;">' +
                         '<button type="button" class="color-remove zmall-widget-btn zmall-widget-btn--secondary">Remove</button>';
                     rowsContainer.appendChild(div);
-                    var colorInput = div.querySelector('input[type="color"]');
-                    var displayInput = div.querySelector('input[readonly]');
-                    colorInput.addEventListener('input', function() {{ displayInput.value = colorInput.value; }});
-                    div.querySelector('.color-remove').addEventListener('click', function() {{ div.remove(); }});
-                    idx++;
+                    bindRow(div);
+                    reindexRows();
                 }});
             }}
         }})();
@@ -151,21 +175,28 @@ class ColorPickerWidget(forms.Widget):
         return mark_safe(html)
 
     def value_from_datadict(self, data, files, name):
-        """Collect from name_N and hex_N. Return JSON string so JSONField form field receives str (avoids TypeError: json.loads got list)."""
+        """Collect color rows by POST index (gaps ok after remove). Return JSON str for JSONField."""
+        hex_pat = re.compile(rf'^{re.escape(name)}_hex_(\d+)$')
+        name_pat = re.compile(rf'^{re.escape(name)}_name_(\d+)$')
+        hex_by_idx = {}
+        name_by_idx = {}
+        for key in data:
+            m_hex = hex_pat.match(key)
+            if m_hex:
+                hex_by_idx[int(m_hex.group(1))] = data.get(key)
+            m_name = name_pat.match(key)
+            if m_name:
+                name_by_idx[int(m_name.group(1))] = data.get(key)
+
         items = []
-        i = 0
-        while True:
-            n = data.get(f'{name}_name_{i}')
-            h = data.get(f'{name}_hex_{i}')
-            if n is None and h is None:
-                break
-            hex_val = (h or '').strip()
+        for i in sorted(set(hex_by_idx) | set(name_by_idx)):
+            hex_val = (hex_by_idx.get(i) or '').strip()
             if not hex_val:
-                hex_val = '#000000'
+                continue
             if not hex_val.startswith('#'):
                 hex_val = '#' + hex_val
-            items.append({'name': (n or '').strip(), 'hex': hex_val})
-            i += 1
+            label = (name_by_idx.get(i) or '').strip() or None
+            items.append({'name': label, 'hex': hex_val})
         return json.dumps(items) if items else '[]'
 
 

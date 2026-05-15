@@ -434,6 +434,17 @@ class ZmallMenuItemForm(forms.ModelForm):
 
         return cleaned
 
+    def clean_colors(self):
+        colors = self.cleaned_data.get('colors')
+        if not colors:
+            return []
+        if isinstance(colors, str):
+            try:
+                colors = json.loads(colors)
+            except json.JSONDecodeError:
+                return []
+        return colors if isinstance(colors, list) else []
+
     def clean_size(self):
         raw = self.cleaned_data.get('size', '')
         if raw is None:
