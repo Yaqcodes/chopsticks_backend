@@ -10,11 +10,23 @@ from core.models import RestaurantSettings
 
 class Category(models.Model):
     """Menu category model. Business-specific."""
-    
+
     name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=100, blank=True, null=True)
     description = models.TextField(blank=True)
     image = models.ImageField(upload_to='categories/', blank=True, null=True)
+    show_in_men = models.BooleanField(
+        default=False,
+        help_text='List this category under the Men nav tab.',
+    )
+    show_in_women = models.BooleanField(
+        default=False,
+        help_text='List this category under the Women nav tab.',
+    )
+    show_in_unisex = models.BooleanField(
+        default=False,
+        help_text='List in both Men and Women nav (shared / unisex shelf).',
+    )
     is_active = models.BooleanField(default=True)
     sort_order = models.PositiveIntegerField(default=0)
     restaurant_settings = models.ForeignKey(

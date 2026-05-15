@@ -132,7 +132,20 @@ class CategoryAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ('name',)}
     
     fieldsets = (
-        (None, {'fields': ('name', 'slug', 'description', 'image', 'is_active', 'sort_order', 'restaurant_settings')}),
+        (None, {
+            'fields': (
+                'name',
+                'slug',
+                'description',
+                'image',
+                'show_in_men',
+                'show_in_women',
+                'show_in_unisex',
+                'is_active',
+                'sort_order',
+                'restaurant_settings',
+            ),
+        }),
     )
     
     def menu_items_count(self, obj):
@@ -469,17 +482,58 @@ class ZmallMenuItemForm(forms.ModelForm):
         return obj
 
 
+class ZmallCategoryForm(forms.ModelForm):
+    """Zmall nav: pick which Men/Women/Unisex tabs list this category."""
+
+    class Meta:
+        model = Category
+        fields = [
+            'name',
+            'description',
+            'image',
+            'show_in_men',
+            'show_in_women',
+            'show_in_unisex',
+            'is_active',
+            'sort_order',
+        ]
+
+    def clean(self):
+        cleaned = super().clean()
+        if not any(
+            cleaned.get(flag)
+            for flag in ('show_in_men', 'show_in_women', 'show_in_unisex')
+        ):
+            raise forms.ValidationError(
+                'Select at least one: Men, Women, and/or Unisex (Unisex shows in both menus).'
+            )
+        return cleaned
+
+
 class ZmallCategoryAdmin(BusinessAdminMixin, ModelAdmin):
     """Categories for Zmall: keep slug safe for non-technical users."""
-    
-    list_display = ['name', 'is_active', 'product_count', 'created_at']
+
+    form = ZmallCategoryForm
+
+    list_display = ['name', 'nav_audience_display', 'is_active', 'sort_order', 'product_count', 'created_at']
     list_filter = ['is_active', 'created_at']
     search_fields = ['name', 'slug', 'description']
-    ordering = ['name']
-    list_editable = ['is_active']
+    ordering = ['sort_order', 'name']
+    list_editable = ['is_active', 'sort_order']
     
     fieldsets = (
-        (None, {'fields': ('name', 'description', 'image', 'is_active', 'sort_order')}),
+        (None, {
+            'fields': (
+                'name',
+                'show_in_men',
+                'show_in_women',
+                'show_in_unisex',
+                'description',
+                'image',
+                'is_active',
+                'sort_order',
+            ),
+        }),
         ('Advanced (do not change)', {
             'fields': ('slug',),
             'classes': ('collapse',),
@@ -487,6 +541,18 @@ class ZmallCategoryAdmin(BusinessAdminMixin, ModelAdmin):
         }),
     )
     readonly_fields = ('slug',)
+
+    def nav_audience_display(self, obj):
+        parts = []
+        if obj.show_in_men:
+            parts.append('Men')
+        if obj.show_in_women:
+            parts.append('Women')
+        if obj.show_in_unisex:
+            parts.append('Unisex')
+        return ', '.join(parts) if parts else '—'
+
+    nav_audience_display.short_description = 'Nav'
 
     def save_model(self, request, obj, form, change):
         if not obj.restaurant_settings_id:

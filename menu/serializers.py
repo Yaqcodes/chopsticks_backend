@@ -71,7 +71,19 @@ class CategorySerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Category
-        fields = ['id', 'name', 'description', 'image', 'is_active', 'sort_order', 'menu_items_count']
+        fields = [
+            'id',
+            'name',
+            'slug',
+            'description',
+            'image',
+            'show_in_men',
+            'show_in_women',
+            'show_in_unisex',
+            'is_active',
+            'sort_order',
+            'menu_items_count',
+        ]
     
     def get_image(self, obj):
         return _media_url(obj.image) if obj.image else None
@@ -226,7 +238,16 @@ class MenuSearchSerializer(serializers.ModelSerializer):
 class CategoryWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = ['name', 'description', 'image', 'is_active', 'sort_order']
+        fields = [
+            'name',
+            'description',
+            'image',
+            'show_in_men',
+            'show_in_women',
+            'show_in_unisex',
+            'is_active',
+            'sort_order',
+        ]
 
     def create(self, validated_data):
         # slug is auto-generated like in ZmallCategoryAdmin.save_model

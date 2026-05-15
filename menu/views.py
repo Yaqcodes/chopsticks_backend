@@ -14,6 +14,7 @@ from .catalog_queryset import (
     filter_queryset_by_badge,
     menu_items_base_catalog_queryset,
 )
+from .category_queryset import exclude_placeholder_categories, storefront_categories_queryset
 from .models import Category, MenuItem
 from .pagination import MenuItemPageNumberPagination
 from .serializers import (
@@ -23,26 +24,20 @@ from .serializers import (
 from .size_sort import size_sort_key
 
 
-def _exclude_placeholder_categories(queryset):
-    return queryset.exclude(name__iexact='None').exclude(slug__iexact='none')
-
-
 class CategoryListView(generics.ListAPIView):
-    """List all active menu categories for the current business."""
-    
+    """Active storefront categories (nav audiences + non-empty); excludes placeholder ``None``."""
+
     serializer_class = CategorySerializer
     permission_classes = [AllowAny]
+    pagination_class = None
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ['sort_order', 'name']
     ordering = ['sort_order']
     
     def get_queryset(self):
         restaurant_settings = get_business_from_request(self.request)
-        # Return categories for this business
-        return _exclude_placeholder_categories(Category.objects.filter(
-            is_active=True,
-            restaurant_settings=restaurant_settings
-        )).distinct()
+        gender = self.request.query_params.get('gender')
+        return storefront_categories_queryset(restaurant_settings, gender=gender)
 
 
 class CategoryDetailView(generics.RetrieveAPIView):
@@ -53,11 +48,8 @@ class CategoryDetailView(generics.RetrieveAPIView):
     
     def get_queryset(self):
         restaurant_settings = get_business_from_request(self.request)
-        # Return categories for this business
-        return _exclude_placeholder_categories(Category.objects.filter(
-            is_active=True,
-            restaurant_settings=restaurant_settings
-        )).distinct()
+        gender = self.request.query_params.get('gender')
+        return storefront_categories_queryset(restaurant_settings, gender=gender)
 
 
 class MenuItemListView(generics.ListAPIView):
@@ -202,7 +194,7 @@ def menu_by_category(request, category_id):
     restaurant_settings = get_business_from_request(request)
     try:
         # Validate category belongs to this business
-        category = _exclude_placeholder_categories(Category.objects.filter(
+        category = exclude_placeholder_categories(Category.objects.filter(
             id=category_id,
             is_active=True,
             restaurant_settings=restaurant_settings
