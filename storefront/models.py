@@ -19,7 +19,7 @@ class SpotlightPost(models.Model):
         on_delete=models.CASCADE,
         related_name='spotlight_posts',
     )
-    image = models.ImageField(upload_to='spotlights/')
+    image = models.ImageField(upload_to='storefront/')
     external_url = models.URLField(
         blank=True,
         help_text='Optional link (Instagram post, article, etc.).',
