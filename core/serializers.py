@@ -34,7 +34,8 @@ class PublicRestaurantSettingsSerializer(serializers.ModelSerializer):
             'vat_rate', 'pickup_delivery_fee', 'delivery_fee_base', 'delivery_fee_per_km',
             'accepts_cash', 'accepts_card', 'accepts_mobile_money',
             'facebook_url', 'instagram_url', 'twitter_url',
-            'logo', 'favicon'
+            'logo', 'favicon',
+            'catalog_listing_mode',
         ]
 
 
