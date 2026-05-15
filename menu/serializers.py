@@ -396,7 +396,8 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         return urls
 
 
-class ProductListSerializer(CategoryStorefrontNameMixin, serializers.ModelSerializer):
+class ProductListSerializer(serializers.ModelSerializer):
+    category_name = serializers.SerializerMethodField()
     category_id = serializers.IntegerField(source='category.id', read_only=True)
     category_slug = serializers.SlugField(source='category.slug', read_only=True, allow_null=True)
     image = serializers.SerializerMethodField()
@@ -431,6 +432,9 @@ class ProductListSerializer(CategoryStorefrontNameMixin, serializers.ModelSerial
             'colors',
             'variants',
         ]
+
+    def get_category_name(self, obj):
+        return _category_storefront_name(getattr(obj, 'category', None))
 
     def get_image(self, obj):
         gi = getattr(obj, 'gallery_images', None)
