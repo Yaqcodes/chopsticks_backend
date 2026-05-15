@@ -57,6 +57,9 @@ class RestaurantSettingsAdmin(admin.ModelAdmin):
         ('Social Media', {
             'fields': ('facebook_url', 'instagram_url', 'twitter_url')
         }),
+        ('Storefront', {
+            'fields': ('catalog_listing_mode',),
+        }),
         ('Branding', {
             'fields': ('logo', 'favicon')
         }),
@@ -222,6 +225,13 @@ class RoschiBusinessSettingsAdmin(BusinessAdminMixin, ModelAdmin):
         ('Social Media Links', {
             'fields': ('facebook_url', 'instagram_url', 'twitter_url'),
             'description': 'Links to your social media pages (optional)'
+        }),
+        ('Storefront', {
+            'fields': ('catalog_listing_mode',),
+            'description': (
+                'How curated homepage modules (spotlights) link to your catalog: '
+                'grouped Products (Zmall) or individual MenuItems (restaurants).'
+            ),
         }),
         ('SEO & Meta Information', {
             'fields': ('meta_title', 'meta_description', 'meta_keywords'),
@@ -438,6 +448,13 @@ class ChopsticksBusinessSettingsAdmin(RoschiBusinessSettingsAdmin):
         ('Social Media Links', {
             'fields': ('facebook_url', 'instagram_url', 'twitter_url'),
             'description': 'Links to your social media pages (optional)'
+        }),
+        ('Storefront', {
+            'fields': ('catalog_listing_mode',),
+            'description': (
+                'How curated homepage modules (spotlights) link to your catalog: '
+                'grouped Products (Zmall) or individual MenuItems (restaurants).'
+            ),
         }),
         ('SEO & Meta Information', {
             'fields': ('meta_title', 'meta_description', 'meta_keywords'),

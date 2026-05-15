@@ -14,6 +14,13 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 
+class CatalogListingMode(models.TextChoices):
+    """How storefronts list purchasable catalog rows for curated modules (spotlights, etc.)."""
+
+    MENU_ITEM = 'menu_item', 'Menu items (SKUs)'
+    PRODUCT = 'product', 'Grouped catalog products'
+
+
 class RestaurantSettings(models.Model):
     """Restaurant settings and configuration."""
     
@@ -110,6 +117,14 @@ class RestaurantSettings(models.Model):
     meta_description = models.TextField(blank=True)
     meta_keywords = models.TextField(blank=True)
     
+    # Storefront catalog
+    catalog_listing_mode = models.CharField(
+        max_length=20,
+        choices=CatalogListingMode.choices,
+        default=CatalogListingMode.MENU_ITEM,
+        help_text='Whether public catalog UIs and spotlight links use grouped Products or MenuItems.',
+    )
+
     # System Settings
     maintenance_mode = models.BooleanField(default=False)
     maintenance_message = models.TextField(blank=True)

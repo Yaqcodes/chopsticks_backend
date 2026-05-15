@@ -75,6 +75,7 @@ urlpatterns += [
     path('api/payments/', include('payments.urls')),
     path('api/promotions/', include('promotions.urls')),
     path('api/addresses/', include('addresses.urls')),
+    path('api/storefront/', include('storefront.urls')),
 ]
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
