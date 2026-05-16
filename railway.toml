@@ -3,8 +3,9 @@
 builder = "NIXPACKS"
 
 [deploy]
-# Procfile drives release (migrate + collectstatic) and web (gunicorn) phases.
-# Tune restart policy + healthcheck to match the lightweight /healthz/ endpoint.
+# Migrations run here (private network) before the web container and healthcheck start.
+# Do not run migrate in the web/start command — fresh DB migrations can exceed the healthcheck window.
+preDeployCommand = "python manage.py migrate --noinput"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 healthcheckPath = "/healthz/"

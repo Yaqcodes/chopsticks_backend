@@ -43,14 +43,13 @@ When the Railway public URL is not yet known (first deploy), set `BASE_URL` to a
 
 ## 3. Deploy
 
-The Procfile separates **build** (no database) from **runtime** (migrations):
-
 ```
-release: python manage.py collectstatic --noinput
-web:     bash bin/start-web.sh   # migrate, then gunicorn
+release:   collectstatic only     # image build — no DB
+preDeploy: migrate                # railway.toml — private ${{Postgres.DATABASE_URL}}
+web:       gunicorn               # starts before healthcheck (do not migrate here)
 ```
 
-Railway often runs `release` while **building the image**, where `postgres.railway.internal` does not resolve. Migrations therefore run in `bin/start-web.sh` when the container starts (private `DATABASE_URL` works).
+Migrations must **not** run in the web start command: on a fresh database they can take over a minute, while the healthcheck timeout is 30s, so gunicorn never listens in time. `preDeployCommand` runs after build on the private network and finishes before the healthcheck.
 
 The healthcheck path is `/healthz/` (configured in `railway.toml`).
 
@@ -58,7 +57,8 @@ The healthcheck path is `/healthz/` (configured in `railway.toml`).
 
 | Symptom | Fix |
 |--------|-----|
-| Fails during **build** with `migrate` in the log | Expected before this branch — deploy latest `railway` (migrate moved to `start-web.sh`). |
+| Fails during **build** with `migrate` in the log | `release` must be collectstatic only; migrate belongs in `preDeployCommand`. |
+| Healthcheck **service unavailable** | Do not run `migrate` in the web/start command; use `preDeployCommand` in `railway.toml`. |
 | Only `DATABASE_URL` is set | Add `${{Postgres.DATABASE_URL}}` via **Connect** (not a hand-copied URL). |
 | `migrate` from your machine | Set `DATABASE_PUBLIC_URL=${{Postgres.DATABASE_PUBLIC_URL}}` locally or export `USE_DATABASE_PUBLIC_URL=1`. |
 
