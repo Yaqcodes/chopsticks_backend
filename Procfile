@@ -1,2 +1,4 @@
-release: python manage.py migrate --noinput && python manage.py collectstatic --noinput
-web: gunicorn chopsticks_backend.wsgi --bind 0.0.0.0:$PORT --workers 3 --threads 2 --timeout 60 --access-logfile - --error-logfile -
+# Release runs during image build on Railway — no private Postgres DNS. DB-free only.
+release: python manage.py collectstatic --noinput
+# Migrations run at container start (see bin/start-web.sh) when postgres.railway.internal resolves.
+web: bash bin/start-web.sh

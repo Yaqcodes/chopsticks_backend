@@ -16,7 +16,7 @@ In the Railway project, create three services:
 
 Then **link** the database and bucket to the Django service:
 
-- Postgres -> Connect: this injects `DATABASE_URL` (and the `PG*` peers) into the Django service.
+- Postgres -> Connect: injects private `DATABASE_URL` (`${{Postgres.DATABASE_URL}}`) and public `DATABASE_PUBLIC_URL` (`${{Postgres.DATABASE_PUBLIC_URL}}`). **Do not run `migrate` during image build** — private DNS (`postgres.railway.internal`) is unavailable there.
 - Bucket -> Connect: choose the Django service. Railway injects `BUCKET`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `ENDPOINT`, `REGION`. Settings auto-detect them and switch the storage backend.
 
 ---
@@ -33,7 +33,8 @@ Copy values from [`.env.railway.template`](./.env.railway.template) into the Dja
 | `ALLOWED_HOSTS` | hostnames you serve | comma-separated |
 | `CORS_ALLOWED_ORIGINS` | tenant frontends | scheme-included |
 | `CSRF_TRUSTED_ORIGINS` | optional | `BASE_URL` is auto-added |
-| `DATABASE_URL` | Postgres link | leave service link to manage |
+| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | private host; used at **container start** |
+| `DATABASE_PUBLIC_URL` | `${{Postgres.DATABASE_PUBLIC_URL}}` | optional; for `manage.py migrate` from your laptop |
 | `BUCKET` / `ACCESS_KEY_ID` / `SECRET_ACCESS_KEY` / `ENDPOINT` / `REGION` | Bucket link | Railway-injected |
 
 When the Railway public URL is not yet known (first deploy), set `BASE_URL` to a placeholder, deploy, copy the assigned `*.up.railway.app` URL, then update `BASE_URL` and redeploy. After cutover to a custom domain (e.g. `https://api.zmall.ng`), only `BASE_URL` and `ALLOWED_HOSTS` need to change in Railway plus the OAuth/Paystack dashboards. No code change.
@@ -42,16 +43,24 @@ When the Railway public URL is not yet known (first deploy), set `BASE_URL` to a
 
 ## 3. Deploy
 
-The Procfile defines two phases:
+The Procfile separates **build** (no database) from **runtime** (migrations):
 
 ```
-release: python manage.py migrate --noinput && python manage.py collectstatic --noinput
-web:     gunicorn chopsticks_backend.wsgi --bind 0.0.0.0:$PORT --workers 3 --threads 2 --timeout 60 --access-logfile - --error-logfile -
+release: python manage.py collectstatic --noinput
+web:     bash bin/start-web.sh   # migrate, then gunicorn
 ```
 
-`release` runs once before traffic is shifted to the new revision. WhiteNoise serves the collected static files in `staticfiles/`.
+Railway often runs `release` while **building the image**, where `postgres.railway.internal` does not resolve. Migrations therefore run in `bin/start-web.sh` when the container starts (private `DATABASE_URL` works).
 
 The healthcheck path is `/healthz/` (configured in `railway.toml`).
+
+### `could not translate host name "postgres.railway.internal"`
+
+| Symptom | Fix |
+|--------|-----|
+| Fails during **build** with `migrate` in the log | Expected before this branch — deploy latest `railway` (migrate moved to `start-web.sh`). |
+| Only `DATABASE_URL` is set | Add `${{Postgres.DATABASE_URL}}` via **Connect** (not a hand-copied URL). |
+| `migrate` from your machine | Set `DATABASE_PUBLIC_URL=${{Postgres.DATABASE_PUBLIC_URL}}` locally or export `USE_DATABASE_PUBLIC_URL=1`. |
 
 ---
 

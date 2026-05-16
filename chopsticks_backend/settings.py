@@ -138,9 +138,20 @@ TEMPLATES = [
 WSGI_APPLICATION = 'chopsticks_backend.wsgi.application'
 
 # Database
-# Production (Railway): set DATABASE_URL (e.g. postgresql://...) and we parse it via dj-database-url.
-# Local dev: leave DATABASE_URL unset to fall back to SQLite, matching legacy PythonAnywhere behavior.
+# Railway: link Postgres so DATABASE_URL uses private host (postgres.railway.internal).
+# That host works at web container start, NOT during image build/release. Also reference
+# DATABASE_PUBLIC_URL (${{Postgres.DATABASE_PUBLIC_URL}}) for migrate from CI/local shells.
+# Local dev: leave both unset → SQLite.
 _DATABASE_URL = config('DATABASE_URL', default='')
+_DATABASE_PUBLIC_URL = config('DATABASE_PUBLIC_URL', default='')
+if _DATABASE_PUBLIC_URL and (
+    'migrate' in sys.argv
+    or os.environ.get('USE_DATABASE_PUBLIC_URL', '').lower() in ('1', 'true', 'yes')
+):
+    _DATABASE_URL = _DATABASE_PUBLIC_URL
+elif not _DATABASE_URL:
+    _DATABASE_URL = _DATABASE_PUBLIC_URL
+
 if _DATABASE_URL:
     DATABASES = {
         'default': dj_database_url.parse(

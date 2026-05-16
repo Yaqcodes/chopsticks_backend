@@ -1,0 +1,5 @@
+# Railway/Nixpacks: do not run Django management commands that need Postgres during
+# the image build. Migrations run in bin/start-web.sh at container start instead.
+[phases.build]
+# Override Nixpacks Django defaults that may run migrate during image build.
+cmds = ["echo 'Skipping DB steps at build; migrate runs in bin/start-web.sh'"]
