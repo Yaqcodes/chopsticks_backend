@@ -81,6 +81,7 @@ staticfiles/
 .env.*
 !.env.dev.template
 !.env.prod.template
+!.env.railway.template
 
 # Virtual environments
 .venv/

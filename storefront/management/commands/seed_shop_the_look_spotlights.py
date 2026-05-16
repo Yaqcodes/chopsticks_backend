@@ -1,14 +1,19 @@
 """
 Seed Zmall shop_the_look spotlight posts (metadata + product links).
 
-Expects lifestyle images already on the server under MEDIA_ROOT/spotlights/
-(default). Does not read from the frontend repo or copy files.
+Source images live in a local directory (default: ``MEDIA_ROOT/spotlights/``).
+With S3-compatible storage configured (Railway buckets), the command uploads
+each source file via ``default_storage`` and stores the resulting object key
+on the post; with local FileSystemStorage it attaches the key directly
+(legacy behavior).
 """
 
 from pathlib import Path
 from typing import Optional
 
 from django.conf import settings
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -125,6 +130,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         dry_run = options['dry_run']
         replace = options['replace']
+        use_s3 = bool(getattr(settings, 'USE_S3_STORAGE', False))
 
         zmall = RestaurantSettings.objects.filter(domain__icontains='zmall').first()
         if not zmall:
@@ -189,11 +195,20 @@ class Command(BaseCommand):
                 rel_name = f'{media_subdir}/{image_path.name}'.replace('\\', '/')
 
                 if dry_run:
+                    label = 'upload' if use_s3 else 'attach'
                     self.stdout.write(
-                        f"[dry-run] sort_order={row['sort_order']} image={rel_name} "
+                        f"[dry-run] sort_order={row['sort_order']} {label}={rel_name} "
                         f"products={product_ids}"
                     )
                     continue
+
+                if use_s3:
+                    target_key = f'{DEFAULT_MEDIA_SUBDIR}/{image_path.name}'
+                    with image_path.open('rb') as fh:
+                        saved_key = default_storage.save(target_key, ContentFile(fh.read()))
+                    stored_name = saved_key
+                else:
+                    stored_name = rel_name
 
                 post = SpotlightPost.objects.create(
                     restaurant_settings=zmall,
@@ -203,7 +218,7 @@ class Command(BaseCommand):
                     sort_order=row['sort_order'],
                     is_active=True,
                 )
-                post.image.name = rel_name
+                post.image.name = stored_name
                 post.save(update_fields=['image'])
                 created_posts += 1
 

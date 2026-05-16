@@ -1,54 +1,39 @@
 import os
-import requests
-from django.conf import settings
-from django.core.files.base import ContentFile
-from django.core.files.storage import default_storage
 import uuid
 from urllib.parse import urlparse
-import mimetypes
+
+import requests
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 
 
 def download_and_save_avatar(avatar_url, user_id, username):
     """
-    Download an avatar image from a URL and save it to the Django media folder.
-    
-    Args:
-        avatar_url (str): The URL of the avatar image
-        user_id (int): The user's ID for unique filename
-        username (str): The username for filename generation
-    
+    Download an avatar image from a URL and save it through the configured storage backend.
+
+    Works on both local FileSystemStorage (dev) and S3-compatible storage (production).
+
     Returns:
-        str: The relative path to the saved image (e.g., '/media/avatars/filename.jpg')
-        None: If download failed
+        str: Storage key (e.g. ``avatars/<username>_<id>_<hash>.jpg``) suitable for
+             assigning to ``ImageField.name`` / ``user.avatar.name``.
+        None: If download failed.
     """
     try:
-        # Create avatars directory if it doesn't exist
-        avatar_dir = os.path.join(settings.MEDIA_ROOT, 'avatars')
-        os.makedirs(avatar_dir, exist_ok=True)
-        
-        # Generate unique filename
-        file_extension = get_file_extension(avatar_url)
-        unique_filename = f"{username}_{user_id}_{uuid.uuid4().hex[:8]}{file_extension}"
-        file_path = os.path.join('avatars', unique_filename)
-        full_path = os.path.join(settings.MEDIA_ROOT, file_path)
-        
-        # Download the image
         response = requests.get(avatar_url, timeout=10)
         response.raise_for_status()
-        
-        # Check if it's actually an image
+
         content_type = response.headers.get('content-type', '')
         if not content_type.startswith('image/'):
             print(f"Warning: URL does not return an image. Content-Type: {content_type}")
             return None
-        
-        # Save the image
-        with open(full_path, 'wb') as f:
-            f.write(response.content)
-        
-        # Return the path without /media/ prefix so Django can generate the correct URL
-        return file_path
-        
+
+        file_extension = get_file_extension(avatar_url)
+        unique_filename = f"{username}_{user_id}_{uuid.uuid4().hex[:8]}{file_extension}"
+        target_key = f'avatars/{unique_filename}'
+
+        saved_key = default_storage.save(target_key, ContentFile(response.content))
+        return saved_key
+
     except requests.RequestException as e:
         print(f"Failed to download avatar from {avatar_url}: {e}")
         return None

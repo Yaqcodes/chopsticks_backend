@@ -1,0 +1,11 @@
+[build]
+# Nixpacks auto-detects requirements.txt + runtime.txt + Procfile.
+builder = "NIXPACKS"
+
+[deploy]
+# Procfile drives release (migrate + collectstatic) and web (gunicorn) phases.
+# Tune restart policy + healthcheck to match the lightweight /healthz/ endpoint.
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+healthcheckPath = "/healthz/"
+healthcheckTimeout = 30

@@ -8,18 +8,10 @@ Variant size is taken only from ``MenuItem.size`` (not the ``sizes`` JSON field)
 from collections import defaultdict
 from decimal import Decimal
 
-from django.conf import settings
+from core.media_urls import absolute_media_url as _media_url
 
 from .models import MenuItem
 from .size_sort import size_sort_key
-
-
-def _media_url(path):
-    if not path or not str(path).strip():
-        return None
-    path = str(path).lstrip('/')
-    base = (settings.MEDIA_URL or '/media/').rstrip('/')
-    return f'{base}/{path}' if path else None
 
 
 def _colors_from_json(colors):

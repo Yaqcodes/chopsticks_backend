@@ -1,19 +1,16 @@
-from django.conf import settings
 from rest_framework import serializers
 from django.utils.text import slugify
+
+from core.media_urls import absolute_media_url
 
 from .models import Category, MenuItem, Product
 from .size_grids import get_size_grid_values, merge_display_sizes
 from .size_sort import size_sort_key
 
 
-def _media_url(path):
-    """Return URL path for media file (e.g. /media/menu_items/2.jpeg). Frontend can then resolve to absolute URL."""
-    if not path or not str(path).strip():
-        return None
-    path = str(path).lstrip('/')
-    base = (settings.MEDIA_URL or '/media/').rstrip('/')
-    return f"{base}/{path}" if path else None
+# Back-compat alias: callers in storefront/services.py still import _media_url from
+# this module. The single implementation lives in core.media_urls.
+_media_url = absolute_media_url
 
 
 def _category_storefront_name(category):

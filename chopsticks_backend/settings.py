@@ -3,8 +3,19 @@ Django settings for chopsticks_backend project.
 """
 
 import os
+import sys
 from pathlib import Path
+
+import dj_database_url
 from decouple import config
+
+# Detect test runs (manage.py test, pytest) so we can force a deterministic
+# filesystem storage backend regardless of the env-supplied bucket credentials.
+RUNNING_TESTS = (
+    'test' in sys.argv
+    or 'pytest' in sys.argv[0]
+    or os.environ.get('PYTEST_CURRENT_TEST') is not None
+)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -13,20 +24,32 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_CHARSET = 'utf-8'
 FILE_CHARSET = 'utf-8'
 
-# Base URL for backend (used for callbacks, etc.)
-BACKEND_BASE_URL = config('BASE_URL', default='stringtheorylabs.pythonanywhere.com')
+# Base URL for backend (used for OAuth callbacks, payment webhooks, absolute media URLs).
+# Production must set BASE_URL explicitly (e.g. https://api.zmall.ng or *.up.railway.app).
+# Empty default is safe for local dev (the helper falls back to relative URLs).
+def _normalize_base_url(value: str) -> str:
+    value = (value or '').strip().rstrip('/')
+    if not value:
+        return ''
+    if not value.startswith(('http://', 'https://')):
+        value = 'https://' + value
+    return value
+
+
+BACKEND_BASE_URL = _normalize_base_url(config('BASE_URL', default=''))
 
 # NOTE: FRONTEND_BASE_URL has been removed for strict multi-tenancy.
 # Frontend URLs are now determined from RestaurantSettings.domain via get_frontend_url_from_business().
 # Each business must have its domain configured in RestaurantSettings.
 
-# Environment Variables for Production (set these on PythonAnywhere):
+# Environment Variables for Production (set these on Railway / host):
 # DEBUG=False
-# ALLOWED_HOSTS=stringtheorylabs.pythonanywhere.com,roschiwater.com,www.roschiwater.com,chopsticksandbowls.com,www.chopsticksandbowls.com
-# CORS_ALLOWED_ORIGINS=https://roschiwater.com,https://www.roschiwater.com,https://chopsticksandbowls.com,https://www.chopsticksandbowls.com
-# SECRET_KEY=your-production-secret-key
-# BASE_URL=https://stringtheorylabs.pythonanywhere.com
-# OAUTH_BASE_URL=https://stringtheorylabs.pythonanywhere.com
+# SECRET_KEY=...
+# BASE_URL=https://<railway-or-custom-domain>
+# ALLOWED_HOSTS=<comma-separated host list>
+# CORS_ALLOWED_ORIGINS=<comma-separated origins>
+# CSRF_TRUSTED_ORIGINS=<comma-separated origins, including BASE_URL>
+# OAUTH_BASE_URL=<defaults to BASE_URL>
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-here')
@@ -34,7 +57,21 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-here'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,chopsticks-frontend.vercel.app,chopsticks-frontend-git-main-khalifas-projects-8b761d27.vercel.app,chopsticks-frontend-escfy7lg4-khalifas-projects-8b761d27.vercel.app,chopsticksandbowls.com,www.chopsticksandbowls.com,chopsticksandb0wls.pythonanywhere.com,stringtheorylabs.pythonanywhere.com,roschiwater.com,www.roschiwater.com,zmall.ng,www.zmall.ng', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = config(
+    'ALLOWED_HOSTS',
+    default='localhost,127.0.0.1',
+    cast=lambda v: [s.strip() for s in v.split(',') if s.strip()],
+)
+
+# CSRF trusted origins must include the API host (with scheme) once it is known.
+# Required for Django admin POSTs behind a TLS-terminating proxy (Railway).
+CSRF_TRUSTED_ORIGINS = config(
+    'CSRF_TRUSTED_ORIGINS',
+    default='',
+    cast=lambda v: [s.strip() for s in v.split(',') if s.strip()],
+)
+if BACKEND_BASE_URL and BACKEND_BASE_URL not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append(BACKEND_BASE_URL)
 
 # Application definition
 INSTALLED_APPS = [
@@ -101,12 +138,25 @@ TEMPLATES = [
 WSGI_APPLICATION = 'chopsticks_backend.wsgi.application'
 
 # Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Production (Railway): set DATABASE_URL (e.g. postgresql://...) and we parse it via dj-database-url.
+# Local dev: leave DATABASE_URL unset to fall back to SQLite, matching legacy PythonAnywhere behavior.
+_DATABASE_URL = config('DATABASE_URL', default='')
+if _DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.parse(
+            _DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+            ssl_require=not DEBUG,
+        ),
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -140,24 +190,69 @@ USE_I18N = True
 USE_L10N = True
 USE_TZ = True
 
-# Static files (CSS, JavaScript, Images)
+# Static files (CSS, JavaScript, Images) - WhiteNoise serves these when DEBUG=False
 STATIC_URL = '/static/'
-
-# STATIC_ROOT is where collectstatic will put files; WhiteNoise serves these when DEBUG=False
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-# WhiteNoise: serve static files without needing DEBUG or a separate web server (admin, unfold, etc.)
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
-
-# STATICFILES_DIRS is where Django looks for static files during development
 STATICFILES_DIRS = [
-    BASE_DIR / "static",
+    BASE_DIR / 'static',
 ]
 
-# Media files (uploaded content: product images, etc.)
-# Use absolute path so serving works regardless of runserver cwd
-MEDIA_URL = '/media/'
-MEDIA_ROOT = str((BASE_DIR / 'media').resolve())
+# Media files
+# Production (Railway): S3-compatible bucket via django-storages when BUCKET / AWS_STORAGE_BUCKET_NAME is set.
+# Local dev: filesystem under MEDIA_ROOT; Django dev server serves /media/.
+USE_S3_STORAGE = bool(
+    os.environ.get('BUCKET') or os.environ.get('AWS_STORAGE_BUCKET_NAME')
+) and not RUNNING_TESTS
+
+# Optional CDN base URL (Phase 2). When set, absolute_media_url() builds
+# stable https://{cdn}/{key} URLs instead of presigning. Leave blank to keep
+# Phase 1 presigned URLs against the private bucket.
+MEDIA_CDN_BASE_URL = config('MEDIA_CDN_BASE_URL', default='').rstrip('/')
+
+if USE_S3_STORAGE:
+    AWS_STORAGE_BUCKET_NAME = os.environ.get('BUCKET') or os.environ['AWS_STORAGE_BUCKET_NAME']
+    AWS_S3_ENDPOINT_URL = (
+        os.environ.get('ENDPOINT')
+        or os.environ.get('AWS_S3_ENDPOINT_URL')
+        or 'https://storage.railway.app'
+    )
+    AWS_S3_REGION_NAME = (
+        os.environ.get('REGION')
+        or os.environ.get('AWS_S3_REGION_NAME')
+        or os.environ.get('AWS_DEFAULT_REGION')
+        or 'auto'
+    )
+    AWS_ACCESS_KEY_ID = os.environ.get('ACCESS_KEY_ID') or os.environ['AWS_ACCESS_KEY_ID']
+    AWS_SECRET_ACCESS_KEY = os.environ.get('SECRET_ACCESS_KEY') or os.environ['AWS_SECRET_ACCESS_KEY']
+    AWS_S3_ADDRESSING_STYLE = config('AWS_S3_ADDRESSING_STYLE', default='virtual')
+    AWS_S3_SIGNATURE_VERSION = 's3v4'
+    AWS_DEFAULT_ACL = None
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_QUERYSTRING_AUTH = config(
+        'AWS_QUERYSTRING_AUTH', default=not bool(MEDIA_CDN_BASE_URL), cast=bool
+    )
+    AWS_QUERYSTRING_EXPIRE = config(
+        'AWS_QUERYSTRING_EXPIRE', default=7 * 24 * 3600, cast=int
+    )
+    AWS_S3_OBJECT_PARAMETERS = {
+        'CacheControl': 'public, max-age=86400',
+    }
+
+    STORAGES = {
+        'default': {'BACKEND': 'chopsticks_backend.storage_backends.MediaStorage'},
+        'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+    }
+    # MEDIA_ROOT is unused with S3 storage but Django still expects MEDIA_URL to exist
+    # for ImageField string representation; storages overrides url() per request.
+    MEDIA_URL = ''
+    MEDIA_ROOT = str((BASE_DIR / 'media').resolve())
+else:
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = str((BASE_DIR / 'media').resolve())
+    STORAGES = {
+        'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+        'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+    }
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -197,7 +292,12 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000  # 1 year
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    # Note: Don't set SECURE_SSL_REDIRECT = True on PythonAnywhere unless you have SSL configured
+    # Railway (and most PaaS) terminate TLS at the edge and forward over HTTP, so we
+    # must trust the X-Forwarded-Proto / X-Forwarded-Host headers for request.is_secure()
+    # and absolute URL building (e.g. OAuth redirects, Paystack callbacks).
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    USE_X_FORWARDED_HOST = True
+    USE_X_FORWARDED_PORT = True
 
 # REST Framework settings
 REST_FRAMEWORK = {
@@ -258,10 +358,10 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@chopsticksand
 # Google Maps API
 GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
 
-# OAuth base URL - derived from BACKEND_BASE_URL (can be overridden via OAUTH_BASE_URL env var)
-# NOTE: OAuth credentials are now business-specific and stored in RestaurantSettings model
-# Each business must have its own Google OAuth credentials configured
-OAUTH_BASE_URL = config('OAUTH_BASE_URL', default=f"https://{BACKEND_BASE_URL}")
+# OAuth base URL - defaults to BACKEND_BASE_URL (can be overridden via OAUTH_BASE_URL env var).
+# OAuth credentials are business-specific (stored on RestaurantSettings); this is just the
+# host that providers redirect back to. Empty in local dev is fine — providers won't be hit.
+OAUTH_BASE_URL = _normalize_base_url(config('OAUTH_BASE_URL', default=BACKEND_BASE_URL))
 
 SOCIAL_AUTH_FACEBOOK_KEY = config('SOCIAL_AUTH_FACEBOOK_KEY', default='')
 SOCIAL_AUTH_FACEBOOK_SECRET = config('SOCIAL_AUTH_FACEBOOK_SECRET', default='')
@@ -301,7 +401,7 @@ DEFAULT_TAX_RATE = config('TAX_RATE', default=0.075, cast=float)
 # Paystack payment settings
 # NOTE: Paystack keys are now business-specific and stored in RestaurantSettings model
 # Each business must have its own Paystack keys configured
-PAYSTACK_CALLBACK_URL = BACKEND_BASE_URL + '/api/payments/callback/'
+PAYSTACK_CALLBACK_URL = (BACKEND_BASE_URL.rstrip('/') + '/api/payments/callback/') if BACKEND_BASE_URL else ''
 PAYSTACK_BASE_URL = config('PAYSTACK_BASE_URL', default='https://api.paystack.co')
 
 # Django Unfold settings
