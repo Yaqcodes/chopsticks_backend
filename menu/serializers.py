@@ -3,6 +3,7 @@ from rest_framework import serializers
 from django.utils.text import slugify
 
 from .models import Category, MenuItem, Product
+from .size_grids import get_size_grid_values, merge_display_sizes
 from .size_sort import size_sort_key
 
 
@@ -98,6 +99,7 @@ class CategorySerializer(serializers.ModelSerializer):
             'show_in_men',
             'show_in_women',
             'show_in_unisex',
+            'size_grid',
             'is_active',
             'sort_order',
             'menu_items_count',
@@ -400,6 +402,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     category_name = serializers.SerializerMethodField()
     category_id = serializers.IntegerField(source='category.id', read_only=True)
     category_slug = serializers.SlugField(source='category.slug', read_only=True, allow_null=True)
+    category_size_grid = serializers.CharField(source='category.size_grid', read_only=True)
     image = serializers.SerializerMethodField()
     badges_display = serializers.SerializerMethodField()
     variant_count = serializers.IntegerField(read_only=True)
@@ -418,6 +421,7 @@ class ProductListSerializer(serializers.ModelSerializer):
             'category_id',
             'category_name',
             'category_slug',
+            'category_size_grid',
             'gender',
             'base_price',
             'min_variant_price',
@@ -454,7 +458,13 @@ class ProductListSerializer(serializers.ModelSerializer):
         fac = getattr(obj, '_list_facet_sizes', None)
         if fac is not None:
             return fac
-        return _distinct_variant_sizes(obj)
+        variant_sizes = _distinct_variant_sizes(obj)
+        category = getattr(obj, 'category', None)
+        if category:
+            fixed = get_size_grid_values(getattr(category, 'size_grid', None))
+            if fixed:
+                return merge_display_sizes(fixed, variant_sizes)
+        return variant_sizes
 
     def get_colors(self, obj):
         fac = getattr(obj, '_list_facet_colors', None)

@@ -7,6 +7,8 @@ from django.db import models
 
 from core.models import RestaurantSettings
 
+from .size_grids import SIZE_GRID_CHOICES, SIZE_GRID_NONE
+
 
 class Category(models.Model):
     """Menu category model. Business-specific."""
@@ -33,6 +35,16 @@ class Category(models.Model):
         default=False,
         help_text='List in both Men and Women nav (shared / unisex shelf).',
     )
+    size_grid = models.CharField(
+        max_length=32,
+        blank=True,
+        default=SIZE_GRID_NONE,
+        choices=SIZE_GRID_CHOICES,
+        help_text=(
+            'Storefront fixed size row for this category. Leave blank for flexible sizes '
+            '(perfume volume, ONE SIZE, etc.).'
+        ),
+    )
     is_active = models.BooleanField(default=True)
     sort_order = models.PositiveIntegerField(default=0)
     restaurant_settings = models.ForeignKey(
@@ -58,6 +70,11 @@ class Category(models.Model):
         """Public label: display_name when set, otherwise name."""
         label = (self.display_name or '').strip()
         return label or self.name
+
+    def get_fixed_size_display_grid(self):
+        from .size_grids import get_size_grid_values
+
+        return get_size_grid_values(self.size_grid)
 
 
 class Product(models.Model):

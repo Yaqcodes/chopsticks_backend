@@ -496,6 +496,7 @@ class ZmallCategoryForm(forms.ModelForm):
             'show_in_men',
             'show_in_women',
             'show_in_unisex',
+            'size_grid',
             'is_active',
             'sort_order',
         ]
@@ -505,6 +506,10 @@ class ZmallCategoryForm(forms.ModelForm):
         self.fields['display_name'].required = False
         self.fields['display_name'].help_text = (
             'Optional. Shown in the menu and category pages instead of Name when set.'
+        )
+        self.fields['size_grid'].help_text = (
+            'Fixed storefront size buttons for this category. Leave as flexible for perfume, '
+            'bags, ONE SIZE, or any custom size labels.'
         )
 
     def clean(self):
@@ -540,6 +545,7 @@ class ZmallCategoryAdmin(BusinessAdminMixin, ModelAdmin):
                 'show_in_men',
                 'show_in_women',
                 'show_in_unisex',
+                'size_grid',
                 'description',
                 'image',
                 'is_active',
