@@ -14,6 +14,7 @@ from django.conf import settings
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.shortcuts import get_object_or_404, render, redirect
+from django.http import HttpResponseBadRequest
 from django.core.exceptions import ValidationError
 from decouple import config
 
@@ -414,19 +415,16 @@ def google_oauth_callback(request):
             except ValueError as ve:
                 logger.warning(f"Business identification from request headers failed: {str(ve)}")
         
-        # Last resort: if still no business found, this is an error
+        # Last resort: no tenant context. Don't fall back to a random tenant —
+        # that misleads users (e.g. typing the callback URL would redirect to
+        # the oldest configured business). Return a plain 400 instead.
         if not restaurant_settings:
             logger.error("Could not identify business for OAuth callback")
-            # Try to get a default frontend URL for error redirect
-            try:
-                default_settings = RestaurantSettings.objects.first()
-                if default_settings:
-                    frontend_url = get_frontend_url_from_business(default_settings, request=request)
-                else:
-                    frontend_url = settings.OAUTH_BASE_URL
-            except:
-                frontend_url = settings.OAUTH_BASE_URL
-            return redirect(f"{frontend_url}/?oauth=error&message=Business identification failed")
+            return HttpResponseBadRequest(
+                "This URL is the Google OAuth callback for completing a sign-in "
+                "flow. It is not meant to be opened directly. Start the sign-in "
+                "from the storefront."
+            )
         
         frontend_url = get_frontend_url_from_business(restaurant_settings, request=request)
         
