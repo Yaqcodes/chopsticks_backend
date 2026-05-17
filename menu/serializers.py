@@ -4,7 +4,7 @@ from django.utils.text import slugify
 from core.media_urls import absolute_media_url
 
 from .models import Category, MenuItem, Product
-from .size_grids import get_size_grid_values, merge_display_sizes
+from .size_grids import get_size_grid_values, merge_display_sizes, resolve_size_grid_key
 from .size_sort import size_sort_key
 
 
@@ -399,7 +399,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     category_name = serializers.SerializerMethodField()
     category_id = serializers.IntegerField(source='category.id', read_only=True)
     category_slug = serializers.SlugField(source='category.slug', read_only=True, allow_null=True)
-    category_size_grid = serializers.CharField(source='category.size_grid', read_only=True)
+    category_size_grid = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
     badges_display = serializers.SerializerMethodField()
     variant_count = serializers.IntegerField(read_only=True)
@@ -437,6 +437,15 @@ class ProductListSerializer(serializers.ModelSerializer):
     def get_category_name(self, obj):
         return _category_storefront_name(getattr(obj, 'category', None))
 
+    def get_category_size_grid(self, obj):
+        category = getattr(obj, 'category', None)
+        if not category:
+            return ''
+        return resolve_size_grid_key(
+            getattr(category, 'size_grid', None),
+            getattr(obj, 'gender', None),
+        )
+
     def get_image(self, obj):
         gi = getattr(obj, 'gallery_images', None)
         if gi is None:
@@ -458,7 +467,10 @@ class ProductListSerializer(serializers.ModelSerializer):
         variant_sizes = _distinct_variant_sizes(obj)
         category = getattr(obj, 'category', None)
         if category:
-            fixed = get_size_grid_values(getattr(category, 'size_grid', None))
+            fixed = get_size_grid_values(
+                getattr(category, 'size_grid', None),
+                getattr(obj, 'gender', None),
+            )
             if fixed:
                 return merge_display_sizes(fixed, variant_sizes)
         return variant_sizes
