@@ -78,13 +78,12 @@ Object keys are tenant-agnostic by prefix today (`menu_items/`, `categories/`, `
 From the legacy environment to Railway:
 
 1. **Database**: dump from current source (`pg_dump` if Postgres; `python manage.py dumpdata` for SQLite source) and load into the new Postgres. Verify with `python manage.py showmigrations` then `migrate --check`.
-2. **Media**: bulk-copy existing files from the legacy `media/` directory into the bucket, **preserving keys**:
+2. **Media**: copy files into the bucket with **the same keys** as in the database (`menu_items/…`, `products/…`, etc. — no `media/` prefix). From a local tree such as `~/Downloads/media`:
    ```sh
-   aws s3 cp --recursive ./media/ s3://$BUCKET/ \
-       --endpoint-url=$ENDPOINT \
-       --region=$REGION
+   export BUCKET=... ACCESS_KEY_ID=... SECRET_ACCESS_KEY=... ENDPOINT=... REGION=auto
+   ./scripts/sync_media_to_railway.sh /path/to/media
    ```
-   (Or use `rclone`, `s5cmd`, or any S3-compatible client.) Random spot-check via `python manage.py shell -c "from django.core.files.storage import default_storage; print(default_storage.exists('menu_items/<key>.jpg'))"`.
+   Equivalent one-liner: `aws s3 sync ./media/ s3://$BUCKET/ --endpoint-url=$ENDPOINT --region=$REGION`. Use `ZMALL_DRY_RUN=1` on the script to preview. GUI option: [Cyberduck](https://cyberduck.io/) or [S3 Browser](https://s3browser.com/) with custom endpoint `ENDPOINT` and the bucket credentials (pgAdmin is Postgres-only). Spot-check: `default_storage.exists('menu_items/<file>')` in `manage.py shell` with bucket env set.
 3. Smoke test admin upload, storefront PDP image, OAuth, Paystack on a staging Railway environment first.
 
 ---

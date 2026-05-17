@@ -31,7 +31,7 @@ class RestaurantSettings(models.Model):
     
     # Contact Information
     address = models.TextField(default="Abuja, Nigeria")
-    phone = models.CharField(max_length=20, default="+234")
+    phone = models.CharField(max_length=80, default="+234")
     email = models.EmailField(default="info@chopsticksandbowls.com")
     website = models.URLField(blank=True, default="https://chopsticksandbowls.com")
     
@@ -257,7 +257,7 @@ class Quote(TimeStampedModel):
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     email = models.EmailField()
-    phone = models.CharField(max_length=20, blank=True)
+    phone = models.CharField(max_length=80, blank=True)
     
     # Quote details
     message = models.TextField()
