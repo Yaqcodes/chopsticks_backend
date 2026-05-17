@@ -36,6 +36,8 @@ class PublicRestaurantSettingsSerializer(serializers.ModelSerializer):
             'facebook_url', 'instagram_url', 'twitter_url',
             'logo', 'favicon',
             'catalog_listing_mode',
+            'maintenance_mode',
+            'maintenance_message',
         ]
 
 
