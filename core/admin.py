@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.shortcuts import render
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin
+from .forms import OPENING_HOURS_ADMIN_HELP, RestaurantSettingsAdminForm
 from .models import RestaurantSettings, Quote
 from .admin_sites import roschi_admin_site, chopsticks_admin_site, zmall_admin_site
 from .main_admin_site import main_admin_site
@@ -171,7 +172,9 @@ class BusinessAdminMixin:
 # Roschi Water Admin Class - Business Settings
 class RoschiBusinessSettingsAdmin(BusinessAdminMixin, ModelAdmin):
     """Business Settings - Configure how your business operates, accepts payments, and delivers orders."""
-    
+
+    form = RestaurantSettingsAdminForm
+
     # Remove list_display and list_editable since we'll redirect to change view
     list_display = ['name', 'tagline', 'phone', 'email', 'is_open', 'last_updated']
     list_display_links = ['name']
@@ -213,7 +216,10 @@ class RoschiBusinessSettingsAdmin(BusinessAdminMixin, ModelAdmin):
         }),
         ('When Are You Open?', {
             'fields': ('opening_time', 'closing_time', 'is_open', 'opening_hours'),
-            'description': 'When customers can place orders'
+            'description': (
+                'When customers can place orders. Opening time and closing time are enough for most '
+                'businesses; opening hours JSON is optional for per-day schedules.'
+            ),
         }),
         ('Pricing', {
             'fields': (
@@ -291,8 +297,9 @@ class RoschiBusinessSettingsAdmin(BusinessAdminMixin, ModelAdmin):
             form.base_fields['free_delivery_threshold'].help_text = 'Orders above this amount get free delivery (set to 0 to disable)'
         
         if 'opening_hours' in form.base_fields:
-            form.base_fields['opening_hours'].label = 'Opening Hours (JSON)'
-            form.base_fields['opening_hours'].help_text = 'Detailed opening hours in JSON format (optional, advanced)'
+            form.base_fields['opening_hours'].label = 'Opening Hours (optional)'
+            form.base_fields['opening_hours'].required = False
+            form.base_fields['opening_hours'].help_text = OPENING_HOURS_ADMIN_HELP
         
         if 'meta_title' in form.base_fields:
             form.base_fields['meta_title'].label = 'SEO Title'
@@ -430,7 +437,10 @@ class ChopsticksBusinessSettingsAdmin(RoschiBusinessSettingsAdmin):
         }),
         ('When Are You Open?', {
             'fields': ('opening_time', 'closing_time', 'is_open', 'opening_hours'),
-            'description': 'When customers can place orders'
+            'description': (
+                'When customers can place orders. Opening time and closing time are enough for most '
+                'businesses; opening hours JSON is optional for per-day schedules.'
+            ),
         }),
         ('Delivery & Pricing', {
             'fields': (

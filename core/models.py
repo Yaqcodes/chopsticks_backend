@@ -58,7 +58,14 @@ class RestaurantSettings(models.Model):
     )
     
     # Operating Hours
-    opening_hours = models.JSONField(default=dict)
+    opening_hours = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            'Optional JSON per weekday (monday–sunday). Each value is "HH:MM" or null if closed. '
+            'Example: {"monday": "09:00", "sunday": null}. Leave empty to use opening/closing time only.'
+        ),
+    )
     opening_time = models.TimeField(null=True, blank=True)
     closing_time = models.TimeField(null=True, blank=True)
     is_open = models.BooleanField(default=True)
