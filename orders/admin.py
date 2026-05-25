@@ -230,15 +230,20 @@ class RoschiOrderItemInline(TabularInline):
     
     model = OrderItem
     extra = 0
-    readonly_fields = ['total_price']
-    fields = ['menu_item', 'quantity', 'unit_price', 'total_price']
+    readonly_fields = ['total_price', 'get_barcode']
+    fields = ['menu_item', 'get_barcode', 'quantity', 'unit_price', 'total_price']
     verbose_name = "Product"
     verbose_name_plural = "Products in This Order"
+
+    def get_barcode(self, obj):
+        barcode = getattr(obj.menu_item, 'barcode', None) if obj.menu_item_id else None
+        return barcode or '—'
+    get_barcode.short_description = 'Barcode'
 
     def get_readonly_fields(self, request, obj=None):
         if request.user.is_superuser:
             return list(self.readonly_fields)
-        return ['menu_item', 'quantity', 'unit_price', 'total_price']
+        return ['menu_item', 'get_barcode', 'quantity', 'unit_price', 'total_price']
 
     def has_add_permission(self, request, obj=None):
         return request.user.is_superuser
@@ -433,7 +438,7 @@ class RoschiOrderAdmin(BusinessAdminMixin, ModelAdmin):
 class RoschiOrderItemAdmin(BusinessAdminMixin, ModelAdmin):
     """Order Items - Individual products that were ordered."""
     
-    list_display = ['order', 'menu_item', 'quantity', 'unit_price_display', 'total_price_display']
+    list_display = ['order', 'menu_item', 'get_barcode', 'quantity', 'unit_price_display', 'total_price_display']
     list_filter = ['order__status', 'order__created_at']
     search_fields = ['order__order_number', 'menu_item__name']
     ordering = ['-order__created_at']
@@ -459,6 +464,11 @@ class RoschiOrderItemAdmin(BusinessAdminMixin, ModelAdmin):
             return list(self.readonly_fields)
         return [f.name for f in self.model._meta.fields]
     
+    def get_barcode(self, obj):
+        barcode = getattr(obj.menu_item, 'barcode', None) if obj.menu_item_id else None
+        return barcode or '—'
+    get_barcode.short_description = 'Barcode'
+
     def unit_price_display(self, obj):
         """Price per unit."""
         return f"₦{obj.unit_price:,.2f}"
