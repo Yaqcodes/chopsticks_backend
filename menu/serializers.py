@@ -4,7 +4,7 @@ from django.utils.text import slugify
 from core.media_urls import absolute_media_url
 
 from .models import Category, MenuItem, Product
-from .size_grids import get_size_grid_values, merge_display_sizes, resolve_size_grid_key
+from .size_grids import get_size_grid_values, get_size_grid_key, merge_display_sizes
 from .size_sort import size_sort_key
 
 
@@ -82,6 +82,7 @@ class CategorySerializer(serializers.ModelSerializer):
     menu_items_count = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
     label = serializers.SerializerMethodField()
+    size_grid = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
@@ -101,6 +102,9 @@ class CategorySerializer(serializers.ModelSerializer):
             'sort_order',
             'menu_items_count',
         ]
+
+    def get_size_grid(self, obj):
+        return get_size_grid_key(obj)
 
     def get_label(self, obj):
         return obj.get_storefront_name()
@@ -441,10 +445,7 @@ class ProductListSerializer(serializers.ModelSerializer):
         category = getattr(obj, 'category', None)
         if not category:
             return ''
-        return resolve_size_grid_key(
-            getattr(category, 'size_grid', None),
-            getattr(obj, 'gender', None),
-        )
+        return get_size_grid_key(category)
 
     def get_image(self, obj):
         gi = getattr(obj, 'gallery_images', None)
@@ -467,10 +468,7 @@ class ProductListSerializer(serializers.ModelSerializer):
         variant_sizes = _distinct_variant_sizes(obj)
         category = getattr(obj, 'category', None)
         if category:
-            fixed = get_size_grid_values(
-                getattr(category, 'size_grid', None),
-                getattr(obj, 'gender', None),
-            )
+            fixed = get_size_grid_values(category)
             if fixed:
                 return merge_display_sizes(fixed, variant_sizes)
         return variant_sizes

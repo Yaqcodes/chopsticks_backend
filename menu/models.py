@@ -7,7 +7,53 @@ from django.db import models
 
 from core.models import RestaurantSettings
 
-from .size_grids import SIZE_GRID_CHOICES, SIZE_GRID_NONE
+
+class SizeGrid(models.Model):
+    """
+    Admin-defined size grids. Assign one to a Category to enforce a fixed set
+    of sizes on the storefront and in admin validation.
+    """
+
+    name = models.CharField(
+        max_length=100,
+        help_text='Descriptive label, e.g. "Men\'s Shoes EU 40–47".',
+    )
+    key = models.SlugField(
+        max_length=50,
+        help_text='URL-safe identifier sent to the storefront API (auto-generated from name).',
+    )
+    sizes = models.JSONField(
+        default=list,
+        help_text='Ordered list of sizes, e.g. ["S","M","L","XL"] or ["40","41","42"].',
+    )
+    restaurant_settings = models.ForeignKey(
+        RestaurantSettings,
+        on_delete=models.CASCADE,
+        related_name='size_grids',
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Size Grid'
+        verbose_name_plural = 'Size Grids'
+        ordering = ['name']
+        unique_together = [('key', 'restaurant_settings')]
+
+    def __str__(self):
+        preview = ', '.join(str(s) for s in (self.sizes or [])[:5])
+        if len(self.sizes or []) > 5:
+            preview += ', …'
+        return f'{self.name} ({preview})' if preview else self.name
+
+    def clean(self):
+        super().clean()
+        if not self.sizes or not isinstance(self.sizes, list) or len(self.sizes) == 0:
+            raise ValidationError({'sizes': 'Enter at least one size.'})
+        for s in self.sizes:
+            if not isinstance(s, str) or not s.strip():
+                raise ValidationError({'sizes': 'Every size must be a non-empty string.'})
 
 
 class Category(models.Model):
@@ -35,15 +81,13 @@ class Category(models.Model):
         default=False,
         help_text='List in both Men and Women nav (shared / unisex shelf).',
     )
-    size_grid = models.CharField(
-        max_length=32,
+    size_grid = models.ForeignKey(
+        SizeGrid,
+        null=True,
         blank=True,
-        default=SIZE_GRID_NONE,
-        choices=SIZE_GRID_CHOICES,
-        help_text=(
-            'Storefront fixed size row for this category. Leave blank for flexible sizes '
-            '(perfume volume, ONE SIZE, etc.).'
-        ),
+        on_delete=models.SET_NULL,
+        related_name='categories',
+        help_text='Pick a size grid, or leave blank for flexible sizing (perfume, bags, etc.).',
     )
     is_active = models.BooleanField(default=True)
     sort_order = models.PositiveIntegerField(default=0)
@@ -74,7 +118,7 @@ class Category(models.Model):
     def get_fixed_size_display_grid(self):
         from .size_grids import get_size_grid_values
 
-        return get_size_grid_values(self.size_grid)
+        return get_size_grid_values(self)
 
 
 class Product(models.Model):

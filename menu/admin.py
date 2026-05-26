@@ -26,8 +26,10 @@ from .models import (
     Product,
     ProductImage,
     ProductVariantLinkEvent,
+    SizeGrid,
 )
 from .product_link_service import link_menu_items_to_product
+from .size_grids import get_size_grid_values
 from core.admin_sites import roschi_admin_site, chopsticks_admin_site, zmall_admin_site
 from core.main_admin_site import main_admin_site
 
@@ -423,9 +425,31 @@ class ZmallMenuItemForm(forms.ModelForm):
             if self.instance.badges:
                 allowed = {c[0] for c in MenuItem.BADGE_CHOICES_ZMALL}
                 self.fields['badge_choices'].initial = [b for b in self.instance.badges if b in allowed]
+            cat = getattr(self.instance, 'category', None)
+            if cat:
+                allowed_sizes = get_size_grid_values(cat)
+                if allowed_sizes:
+                    self.fields['size'].help_text = (
+                        f'Allowed sizes for {cat.name}: {", ".join(allowed_sizes)}'
+                    )
     
     def clean(self):
         cleaned = super().clean()
+
+        category = cleaned.get('category')
+        size = cleaned.get('size')
+        if category and size:
+            allowed_sizes = get_size_grid_values(category)
+            if allowed_sizes:
+                normalised = {s.strip().lower() for s in allowed_sizes}
+                if size.strip().lower() not in normalised:
+                    raise ValidationError({
+                        'size': (
+                            f'"{size}" is not a valid size for the "{category.name}" category. '
+                            f'Allowed sizes: {", ".join(allowed_sizes)}'
+                        )
+                    })
+
         pct = cleaned.get('discount_percent_calculator')
         if pct is not None and pct != '':
             try:
@@ -507,9 +531,11 @@ class ZmallCategoryForm(forms.ModelForm):
         self.fields['display_name'].help_text = (
             'Optional. Shown in the menu and category pages instead of Name when set.'
         )
+        self.fields['size_grid'].required = False
         self.fields['size_grid'].help_text = (
-            'Fixed storefront size buttons for this category. Leave as flexible for perfume, '
-            'bags, ONE SIZE, or any custom size labels.'
+            'Fixed storefront size buttons for this category. '
+            'Leave empty for flexible sizing (perfume, bags, ONE SIZE, etc.). '
+            'Create new grids in the Size Grids section.'
         )
 
     def clean(self):
@@ -594,8 +620,15 @@ class ZmallCategoryAdmin(BusinessAdminMixin, ModelAdmin):
         return 0
     product_count.short_description = 'Products'
     
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'size_grid':
+            business_settings = self._get_business_settings()
+            if business_settings:
+                kwargs['queryset'] = SizeGrid.objects.filter(restaurant_settings=business_settings)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
     def get_queryset(self, request):
-        qs = super().get_queryset(request)
+        qs = super().get_queryset(request).select_related('size_grid')
         business_settings = self._get_business_settings()
         if not business_settings:
             return qs.none()
@@ -1517,12 +1550,121 @@ class ProductVariantLinkEventAdmin(BusinessAdminMixin, ModelAdmin):
         return False
 
 
+class SizeGridForm(forms.ModelForm):
+    """Two fields only: name + comma-separated sizes. Key and JSON are automatic."""
+
+    sizes_text = forms.CharField(
+        label='Sizes',
+        required=True,
+        widget=UnfoldAdminTextInputWidget(),
+        help_text='Enter sizes separated by commas, e.g.  S, M, L, XL  or  28, 30, 32, 34, 36',
+    )
+
+    class Meta:
+        model = SizeGrid
+        fields = ['name']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and self.instance.sizes:
+            self.fields['sizes_text'].initial = ', '.join(str(s) for s in self.instance.sizes)
+
+    def clean_sizes_text(self):
+        raw = self.cleaned_data.get('sizes_text', '')
+        parts = [s.strip() for s in raw.split(',') if s.strip()]
+        if not parts:
+            raise ValidationError('Enter at least one size.')
+        return parts
+
+    def _generate_unique_key(self, base_key):
+        candidate = (base_key or 'grid')[:50]
+        n = 0
+        while True:
+            qs = SizeGrid.objects.filter(key=candidate)
+            if self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            rs_id = self.instance.restaurant_settings_id
+            if rs_id:
+                qs = qs.filter(restaurant_settings_id=rs_id)
+            if not qs.exists():
+                return candidate
+            n += 1
+            suffix = f'-{n}'
+            candidate = f'{base_key[:(50 - len(suffix))]}{suffix}'
+
+    def _post_clean(self):
+        """Apply sizes/key before model full_clean (sizes is not a form field)."""
+        if 'sizes_text' not in self.cleaned_data:
+            return
+        self.instance.sizes = self.cleaned_data['sizes_text']
+        name = self.cleaned_data.get('name') or self.instance.name
+        if name and not (self.instance.key or '').strip():
+            self.instance.key = self._generate_unique_key(slugify(name) or 'grid')
+        super()._post_clean()
+
+    def _update_errors(self, errors):
+        """Map model validation on ``sizes`` to the visible ``sizes_text`` field."""
+        if hasattr(errors, 'error_dict') and 'sizes' in errors.error_dict:
+            errors.error_dict['sizes_text'] = errors.error_dict.pop('sizes')
+        super()._update_errors(errors)
+
+
+class ZmallSizeGridAdmin(BusinessAdminMixin, ModelAdmin):
+    """Size Grids — define the size options shown on the storefront for each category."""
+
+    form = SizeGridForm
+    list_display = ['name', 'sizes_preview', 'category_count', 'created_at']
+    search_fields = ['name', 'key']
+    ordering = ['name']
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'sizes_text'),
+            'description': (
+                'Create a named size grid (e.g. "Men\'s Jeans") and list the sizes. '
+                'Then assign it to one or more categories.'
+            ),
+        }),
+    )
+
+    def sizes_preview(self, obj):
+        sizes = obj.sizes or []
+        preview = ', '.join(str(s) for s in sizes[:8])
+        if len(sizes) > 8:
+            preview += ', …'
+        return preview or '—'
+    sizes_preview.short_description = 'Sizes'
+
+    def category_count(self, obj):
+        return obj.categories.count()
+    category_count.short_description = 'Categories using this'
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request).prefetch_related('categories')
+        business_settings = self._get_business_settings()
+        if business_settings:
+            return qs.filter(restaurant_settings=business_settings)
+        return qs.none()
+
+    def save_model(self, request, obj, form, change):
+        if not obj.restaurant_settings_id:
+            business_settings = self._get_business_settings()
+            if business_settings:
+                obj.restaurant_settings = business_settings
+        super().save_model(request, obj, form, change)
+
+    def _get_business_settings(self):
+        if hasattr(self.admin_site, 'get_business_settings'):
+            return self.admin_site.get_business_settings()
+        return None
+
+
 # Register with business admin sites
 roschi_admin_site.register(Category, RoschiCategoryAdmin)
 roschi_admin_site.register(MenuItem, RoschiMenuItemAdmin)
 chopsticks_admin_site.register(Category, RoschiCategoryAdmin)
 chopsticks_admin_site.register(MenuItem, RoschiMenuItemAdmin)
 zmall_admin_site.register(Category, ZmallCategoryAdmin)
+zmall_admin_site.register(SizeGrid, ZmallSizeGridAdmin)
 zmall_admin_site.register(Product, ZmallProductAdmin)
 zmall_admin_site.register(ProductVariantLinkEvent, ProductVariantLinkEventAdmin)
 zmall_admin_site.register(MenuItem, ZmallMenuItemAdmin)

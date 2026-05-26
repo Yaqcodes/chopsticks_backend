@@ -1,68 +1,36 @@
 """
-Canonical storefront size grids for categories that use fixed EU shoe or S–XL letter sizing.
+Size grid helpers.
 
-Other categories keep flexible sizing (perfume volume, ONE SIZE, etc.) — size_grid blank.
+All grid definitions live in the ``SizeGrid`` model (admin-managed).
+These thin helpers read from a Category's FK and merge with variant sizes.
 """
 
-SIZE_GRID_NONE = ''
-SIZE_GRID_SHOE_EU = 'shoe_eu'
-SIZE_GRID_SHOE_EU_WOMEN = 'shoe_eu_women'
-SIZE_GRID_CLOTHING_S_XL = 'clothing_s_xl'
 
-SIZE_GRID_CHOICES = [
-    (SIZE_GRID_NONE, 'Flexible (sizes from variants only)'),
-    (SIZE_GRID_SHOE_EU, 'Shoes — EU 40–47 (men)'),
-    (SIZE_GRID_SHOE_EU_WOMEN, 'Shoes — EU 37–42 (women)'),
-    (SIZE_GRID_CLOTHING_S_XL, 'Apparel — S, M, L, XL'),
-]
-
-SHOE_EU_MEN_DISPLAY_GRID = ['40', '41', '42', '43', '44', '45', '46', '47']
-SHOE_EU_WOMEN_DISPLAY_GRID = ['37', '38', '39', '40', '41', '42']
-CLOTHING_S_XL_DISPLAY_GRID = ['S', 'M', 'L', 'XL']
-
-# Back-compat alias
-SHOE_EU_DISPLAY_GRID = SHOE_EU_MEN_DISPLAY_GRID
-
-_SIZE_GRID_VALUES = {
-    SIZE_GRID_SHOE_EU: SHOE_EU_MEN_DISPLAY_GRID,
-    SIZE_GRID_SHOE_EU_WOMEN: SHOE_EU_WOMEN_DISPLAY_GRID,
-    SIZE_GRID_CLOTHING_S_XL: CLOTHING_S_XL_DISPLAY_GRID,
-}
-
-# Default backfill when migrating existing Zmall categories (slug → size_grid).
-DEFAULT_SIZE_GRID_BY_CATEGORY_SLUG = {
-    'shoes': SIZE_GRID_SHOE_EU,
-    'pants': SIZE_GRID_CLOTHING_S_XL,
-    'dresses': SIZE_GRID_CLOTHING_S_XL,
-    'shirts': SIZE_GRID_CLOTHING_S_XL,
-}
-
-
-def resolve_size_grid_key(size_grid, gender=None):
+def get_size_grid_values(category, gender=None):
     """
-    Pick the storefront grid key for a product (category grid + product gender).
-    Men's shoe category grid + women product → women's EU grid.
+    Return the fixed display sizes for a category, or None when flexible.
+
+    Accepts a Category instance (reads its ``size_grid`` FK).
     """
-    key = (size_grid or '').strip()
-    if not key:
-        return ''
-    g = (gender or '').strip().lower()
-    if key == SIZE_GRID_SHOE_EU and g == 'women':
-        return SIZE_GRID_SHOE_EU_WOMEN
-    return key
-
-
-def get_size_grid_values(size_grid, gender=None):
-    """Return fixed display sizes for a grid key, or None when flexible."""
-    key = resolve_size_grid_key(size_grid, gender)
-    if not key:
+    grid = getattr(category, 'size_grid', None) if category else None
+    if grid is None:
         return None
-    values = _SIZE_GRID_VALUES.get(key)
-    return list(values) if values else None
+    sizes = getattr(grid, 'sizes', None)
+    if not sizes or not isinstance(sizes, list):
+        return None
+    return list(sizes)
 
 
-def uses_fixed_size_grid(size_grid, gender=None):
-    return get_size_grid_values(size_grid, gender) is not None
+def get_size_grid_key(category):
+    """Return the slug key for the API, or empty string."""
+    grid = getattr(category, 'size_grid', None) if category else None
+    if grid is None:
+        return ''
+    return getattr(grid, 'key', '') or ''
+
+
+def uses_fixed_size_grid(category, gender=None):
+    return get_size_grid_values(category, gender) is not None
 
 
 def merge_display_sizes(fixed_grid, variant_sizes):
