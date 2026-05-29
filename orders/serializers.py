@@ -6,6 +6,7 @@ import logging
 from django.conf import settings
 
 from core.utils import get_business_from_request
+from .services import validate_order_items
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +166,12 @@ class UnifiedOrderSerializer(serializers.ModelSerializer):
         if not data.get('items'):
             raise serializers.ValidationError({
                 'items': 'Order must contain at least one item.'
+            })
+
+        stock_errors = validate_order_items(data['items'], restaurant_settings=restaurant_settings)
+        if stock_errors:
+            raise serializers.ValidationError({
+                'items': stock_errors[0] if len(stock_errors) == 1 else stock_errors,
             })
         
         # Calculate reward and promo discounts
@@ -675,6 +682,12 @@ class GuestOrderSerializer(serializers.ModelSerializer):
         # Validate items
         if not data.get('items'):
             raise serializers.ValidationError("Order must contain at least one item.")
+
+        stock_errors = validate_order_items(data['items'], restaurant_settings=restaurant_settings)
+        if stock_errors:
+            raise serializers.ValidationError({
+                'items': stock_errors[0] if len(stock_errors) == 1 else stock_errors,
+            })
         
         # Validate minimum order amount
         if data.get('total_amount', 0) < minimum_order:
@@ -982,6 +995,12 @@ class OrderSerializer(serializers.ModelSerializer):
         if not data.get('items'):
             raise serializers.ValidationError({
                 'items': 'Order must contain at least one item.'
+            })
+
+        stock_errors = validate_order_items(data['items'], restaurant_settings=restaurant_settings)
+        if stock_errors:
+            raise serializers.ValidationError({
+                'items': stock_errors[0] if len(stock_errors) == 1 else stock_errors,
             })
         
         # Calculate reward discount if reward_id is provided
@@ -1404,6 +1423,15 @@ class CartCalculationSerializer(serializers.Serializer):
         """Validate cart items."""
         if not value:
             raise serializers.ValidationError("Cart must contain at least one item.")
+        request = self.context.get('request')
+        restaurant_settings = None
+        if request:
+            restaurant_settings = get_business_from_request(request)
+        stock_errors = validate_order_items(value, restaurant_settings=restaurant_settings)
+        if stock_errors:
+            raise serializers.ValidationError(
+                stock_errors[0] if len(stock_errors) == 1 else stock_errors
+            )
         return value
 
 

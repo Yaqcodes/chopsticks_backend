@@ -17,11 +17,24 @@ from .models import Payment
 from .services import PaystackService, PaystackError, PaystackAPIError, PaystackVerificationError
 from orders.models import Order
 from orders.services import reduce_stock_for_order
-from orders.services import InsufficientStockError
+from orders.services import InsufficientStockError, validate_order_items
 from loyalty.services import award_points_for_order
 from .services import kobo_to_naira
 
 logger = logging.getLogger(__name__)
+
+PAYABLE_ORDER_PAYMENT_STATUSES = ('pending', 'failed')
+
+
+def _user_owns_order(order, user):
+    """Return True if authenticated user may pay for this order."""
+    if not user or not getattr(user, 'is_authenticated', False):
+        return True
+    if order.user_id:
+        return order.user_id == user.id
+    if order.guest_email and user.email:
+        return order.guest_email.strip().lower() == user.email.strip().lower()
+    return False
 
 
 @api_view(['POST'])
@@ -39,15 +52,14 @@ def initialize_payment(request):
         if order.restaurant_settings != restaurant_settings:
             return Response({'error': 'Order does not belong to this business'}, status=status.HTTP_403_FORBIDDEN)
         
-        # Check if order is pending payment
-        if order.payment_status != 'pending':
-            return Response({'error': 'Order is not pending payment'}, status=status.HTTP_400_BAD_REQUEST)
+        if order.status == 'cancelled':
+            return Response({'error': 'This order was cancelled.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if order.payment_status not in PAYABLE_ORDER_PAYMENT_STATUSES:
+            return Response({'error': 'This order does not require payment.'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # For authenticated users, verify they own the order
-        if order.user and request.user.is_authenticated:
-            if order.user != request.user:
-                return Response({'error': 'You can only pay for your own orders'}, status=status.HTTP_403_FORBIDDEN)
-        # For guest orders, no user verification needed
+        if request.user.is_authenticated and not _user_owns_order(order, request.user):
+            return Response({'error': 'You can only pay for your own orders.'}, status=status.HTTP_403_FORBIDDEN)
         
         if not restaurant_settings.paystack_secret_key:
             return Response({'error': 'Paystack secret key not configured for this business'}, status=status.HTTP_400_BAD_REQUEST)
@@ -56,64 +68,92 @@ def initialize_payment(request):
 
         callback_url = request.build_absolute_uri('/api/payments/callback/')
 
-        # Initialize Paystack transaction
         paystack = PaystackService(
             secret_key=restaurant_settings.paystack_secret_key,
             public_key=restaurant_settings.paystack_public_key,
         )
-        result = paystack.initialize_transaction(
-            email=order.get_customer_email(),
-            amount_kobo=order.get_paystack_amount(),
-            order_number=order.order_number,
-            callback_url=callback_url
-        )
-        
-        # Create Payment record and update order atomically
+
         from django.db import transaction
-        
+
         try:
             with transaction.atomic():
-                # Lock order to prevent concurrent payment initialization
                 order = Order.objects.select_for_update().get(id=order.id)
-                
-                # Check if payment already initialized
-                if order.paystack_reference:
-                    logger.warning(f"Order {order.id} already has payment reference: {order.paystack_reference}")
-                    # Return existing payment info
-                    existing_payment = Payment.objects.filter(order=order).first()
-                    if existing_payment:
-                        return Response({
-                            'authorization_url': existing_payment.authorization_url,
-                            'reference': existing_payment.reference,
-                            'access_code': existing_payment.access_code,
-                            'public_key': restaurant_settings.paystack_public_key
-                        })
-                
-                # Create Payment record
-                payment = Payment.objects.create(
+
+                if order.status == 'cancelled':
+                    return Response({'error': 'This order was cancelled.'}, status=status.HTTP_400_BAD_REQUEST)
+                if order.payment_status not in PAYABLE_ORDER_PAYMENT_STATUSES:
+                    return Response({'error': 'This order does not require payment.'}, status=status.HTTP_400_BAD_REQUEST)
+
+                existing_payment = (
+                    Payment.objects.filter(order=order).order_by('-created_at').first()
+                )
+                can_reuse_existing = (
+                    order.payment_status == 'pending'
+                    and existing_payment
+                    and existing_payment.status == 'pending'
+                    and existing_payment.authorization_url
+                    and order.paystack_reference == existing_payment.reference
+                )
+                if can_reuse_existing:
+                    logger.info(
+                        "Reusing pending Paystack session for order %s (ref %s)",
+                        order.id,
+                        existing_payment.reference,
+                    )
+                    return Response({
+                        'authorization_url': existing_payment.authorization_url,
+                        'reference': existing_payment.reference,
+                        'access_code': existing_payment.access_code,
+                        'public_key': restaurant_settings.paystack_public_key,
+                    })
+
+                if order.payment_status == 'failed':
+                    order.payment_status = 'pending'
+
+                order_item_payloads = [
+                    {'menu_item_id': item.menu_item_id, 'quantity': item.quantity}
+                    for item in order.items.all()
+                ]
+                stock_errors = validate_order_items(
+                    order_item_payloads,
+                    restaurant_settings=restaurant_settings,
+                )
+                if stock_errors:
+                    return Response(
+                        {'error': stock_errors[0], 'items': stock_errors},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                result = paystack.initialize_transaction(
+                    email=order.get_customer_email(),
+                    amount_kobo=order.get_paystack_amount(),
+                    order_number=order.order_number,
+                    callback_url=callback_url,
+                )
+
+                Payment.objects.create(
                     reference=result['reference'],
                     order=order,
                     amount=order.total_amount,
                     amount_kobo=order.get_paystack_amount(),
                     access_code=result['access_code'],
                     authorization_url=result['authorization_url'],
-                    customer_email=order.get_customer_email()
+                    customer_email=order.get_customer_email(),
                 )
-                
-                # Update order with Paystack reference atomically
+
                 order.paystack_reference = result['reference']
                 order.paystack_access_code = result['access_code']
                 order.save()
+
+                return Response({
+                    'authorization_url': result['authorization_url'],
+                    'reference': result['reference'],
+                    'access_code': result['access_code'],
+                    'public_key': restaurant_settings.paystack_public_key,
+                })
         except Exception as e:
             logger.error(f"Error initializing payment in transaction: {str(e)}")
             raise
-        
-        return Response({
-            'authorization_url': result['authorization_url'],
-            'reference': result['reference'],
-            'access_code': result['access_code'],
-            'public_key': restaurant_settings.paystack_public_key
-        })
         
     except PaystackAPIError as e:
         logger.error(f"Paystack API error: {str(e)}")

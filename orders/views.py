@@ -84,9 +84,12 @@ class OrderDetailView(generics.RetrieveAPIView):
         if getattr(self, 'swagger_fake_view', False):
             return Order.objects.none()
         restaurant_settings = get_business_from_request(self.request)
+        from django.db.models import Q
+        user = self.request.user
         return Order.objects.filter(
-            user=self.request.user,
             restaurant_settings=restaurant_settings,
+        ).filter(
+            Q(user=user) | Q(guest_email=user.email)
         )
 
     def get_object(self):
@@ -334,7 +337,10 @@ def order_tracking(request, order_number):
 def calculate_cart_totals_view(request):
     """Calculate cart totals including tax and delivery fees."""
     
-    serializer = CartCalculationSerializer(data=request.data)
+    serializer = CartCalculationSerializer(
+        data=request.data,
+        context={'request': request},
+    )
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     

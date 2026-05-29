@@ -78,6 +78,7 @@ def menu_items_base_catalog_queryset(request, restaurant_settings):
     """
     queryset = MenuItem.objects.filter(
         is_available=True,
+        sku__gte=1,
         restaurant_settings=restaurant_settings,
     )
 

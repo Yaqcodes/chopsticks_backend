@@ -252,33 +252,71 @@ def process_order_payment(order, payment_method, payment_data=None):
         return False, "Unsupported payment method"
 
 
-def validate_order_items(items):
-    """Validate order items for availability and pricing."""
-    
+def _resolve_menu_item_from_item_data(item_data):
+    """Return MenuItem instance from cart/order item payload."""
+    menu_item = item_data.get('menu_item')
+    if isinstance(menu_item, MenuItem):
+        return menu_item
+    menu_item_id = item_data.get('menu_item_id', menu_item)
+    if menu_item_id is None:
+        raise MenuItem.DoesNotExist()
+    return MenuItem.objects.get(id=menu_item_id)
+
+
+def validate_order_items(items, restaurant_settings=None, validate_prices=False):
+    """
+    Validate order items for availability, stock, and optional pricing.
+
+    Returns a list of human-readable error strings (empty when valid).
+    """
+    from menu.product_catalog import variant_is_purchasable
+
     errors = []
-    
+
     for item_data in items:
         try:
-            menu_item = MenuItem.objects.get(id=item_data['menu_item_id'])
-            
-            # Check if item is available
-            if not menu_item.is_available:
-                errors.append(f"Item '{menu_item.name}' is not available")
-            
-            # Check if price matches effective (list/sale) price
+            menu_item = _resolve_menu_item_from_item_data(item_data)
+        except MenuItem.DoesNotExist:
+            errors.append('One or more items are no longer available.')
+            continue
+
+        if restaurant_settings and menu_item.restaurant_settings_id != restaurant_settings.pk:
+            errors.append(f"Item '{menu_item.name}' is not available.")
+            continue
+
+        if not variant_is_purchasable(menu_item):
+            errors.append(f"'{menu_item.name}' is out of stock or unavailable.")
+            continue
+
+        try:
+            qty = int(item_data.get('quantity', 1))
+        except (TypeError, ValueError):
+            errors.append(f"Invalid quantity for '{menu_item.name}'.")
+            continue
+
+        if qty < 1:
+            errors.append(f"Invalid quantity for '{menu_item.name}'.")
+            continue
+
+        if menu_item.sku < qty:
+            if menu_item.sku < 1:
+                errors.append(f"'{menu_item.name}' is out of stock.")
+            else:
+                errors.append(
+                    f"Only {menu_item.sku} unit(s) of '{menu_item.name}' available."
+                )
+            continue
+
+        if validate_prices:
             expected = menu_item.get_effective_price()
             submitted = item_data.get('unit_price', expected)
             try:
-                from decimal import Decimal
                 submitted_dec = Decimal(str(submitted))
                 if abs(submitted_dec - expected) > Decimal('0.01'):
-                    errors.append(f"Price for '{menu_item.name}' has changed")
+                    errors.append(f"Price for '{menu_item.name}' has changed.")
             except Exception:
-                errors.append(f"Price for '{menu_item.name}' has changed")
-            
-        except MenuItem.DoesNotExist:
-            errors.append(f"Menu item with ID {item_data['menu_item_id']} not found")
-    
+                errors.append(f"Price for '{menu_item.name}' has changed.")
+
     return errors
 
 

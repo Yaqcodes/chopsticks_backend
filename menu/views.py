@@ -113,6 +113,7 @@ class MenuItemDetailView(generics.RetrieveAPIView):
         restaurant_settings = get_business_from_request(self.request)
         return MenuItem.objects.filter(
             is_available=True,
+            sku__gte=1,
             restaurant_settings=restaurant_settings,
         )
     serializer_class = MenuItemDetailSerializer
