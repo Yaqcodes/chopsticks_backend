@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from .models import Order
 from addresses.models import Address
 from menu.models import MenuItem
-from promotions.models import PromoCode
+from promotions.services import PromoCodeError, normalize_promo_code, validate_promo_for_checkout
 from utils.geocoding import calculate_distance
 from core.models import RestaurantSettings
 
@@ -107,6 +107,8 @@ def calculate_cart_totals(
     promo_code=None,
     user_reward=None,
     restaurant_settings=None,
+    user=None,
+    guest_email=None,
 ):
     """
     Calculate complete cart totals including tax and delivery fees.
@@ -141,11 +143,21 @@ def calculate_cart_totals(
     # Calculate total before discounts
     total = subtotal + tax_amount + delivery_fee
     
-    # Apply promo code discount if provided
-    discount_amount = Decimal('0.00')
-    if promo_code:
-        # TODO: Implement promo code logic
-        pass
+    # Apply promo code discount on subtotal (industry standard: before tax/shipping)
+    promo_discount = Decimal('0.00')
+    applied_promo_code = None
+    normalized_code = normalize_promo_code(promo_code)
+    if normalized_code:
+        _, promo_discount = validate_promo_for_checkout(
+            normalized_code,
+            subtotal,
+            restaurant_settings,
+            user=user,
+            guest_email=guest_email,
+        )
+        applied_promo_code = normalized_code
+
+    discount_amount = promo_discount
     
     # Calculate reward discount
     reward_discount = "0"  # Default as string
@@ -195,6 +207,8 @@ def calculate_cart_totals(
         'tax_rate': vat_rate,
         'delivery_fee': delivery_fee,
         'discount_amount': discount_amount,
+        'promo_discount': promo_discount,
+        'promo_code': applied_promo_code,
         'reward_discount': reward_discount,  # String format as requested
         'total': final_total,
         'delivery_type': delivery_type

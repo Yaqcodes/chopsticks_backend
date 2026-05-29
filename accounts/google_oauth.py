@@ -12,6 +12,29 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
 
+def resolve_oauth_credentials(restaurant_settings):
+    """
+    Return (client_id, client_secret) for the tenant.
+    In DEBUG, falls back to SOCIAL_AUTH_GOOGLE_* env vars when tenant fields are empty.
+    """
+    client_id = (restaurant_settings.google_oauth_client_id or '').strip() if restaurant_settings else ''
+    client_secret = (restaurant_settings.google_oauth_client_secret or '').strip() if restaurant_settings else ''
+
+    if client_id and client_secret:
+        return client_id, client_secret
+
+    if settings.DEBUG:
+        env_id = getattr(settings, 'SOCIAL_AUTH_GOOGLE_OAUTH2_KEY', '') or ''
+        env_secret = getattr(settings, 'SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET', '') or ''
+        if env_id and env_secret:
+            return env_id.strip(), env_secret.strip()
+
+    if client_id:
+        return client_id, client_secret
+
+    return None, None
+
+
 def validate_google_oauth_token(access_token, restaurant_settings):
     """
     Validate Google OAuth access token and return user information (business-scoped).
@@ -26,10 +49,12 @@ def validate_google_oauth_token(access_token, restaurant_settings):
     Raises:
         ValidationError: If token is invalid or expired
     """
-    if not restaurant_settings or not restaurant_settings.google_oauth_client_id:
+    if not restaurant_settings:
         raise ValidationError('OAuth credentials not configured for this business')
     
-    client_id = restaurant_settings.google_oauth_client_id
+    client_id, _ = resolve_oauth_credentials(restaurant_settings)
+    if not client_id:
+        raise ValidationError('OAuth credentials not configured for this business')
     
     try:
         # First, try to validate the token using Google's ID token validation
@@ -98,11 +123,14 @@ def get_google_oauth_url(restaurant_settings):
     Raises:
         ValueError: If OAuth credentials are not configured
     """
-    if not restaurant_settings or not restaurant_settings.google_oauth_client_id:
+    if not restaurant_settings:
         raise ValueError('OAuth credentials not configured for this business')
     
-    client_id = restaurant_settings.google_oauth_client_id
-    redirect_uri = f"{settings.OAUTH_BASE_URL}/api/auth/google/callback/"
+    client_id, _ = resolve_oauth_credentials(restaurant_settings)
+    if not client_id:
+        raise ValueError('OAuth credentials not configured for this business')
+    
+    redirect_uri = f"{settings.OAUTH_BASE_URL.rstrip('/')}/api/auth/google/callback/"
     scope = "openid email profile"
     
     # Include business identifier in state parameter for callback identification
@@ -142,15 +170,15 @@ def exchange_code_for_token(authorization_code, restaurant_settings):
     Raises:
         ValidationError: If token exchange fails
     """
-    if not restaurant_settings or not restaurant_settings.google_oauth_client_id:
+    if not restaurant_settings:
+        raise ValidationError('OAuth credentials not configured for this business')
+    
+    client_id, client_secret = resolve_oauth_credentials(restaurant_settings)
+    if not client_id or not client_secret:
         raise ValidationError('OAuth credentials not configured for this business')
     
     try:
-        client_id = restaurant_settings.google_oauth_client_id
-        client_secret = restaurant_settings.google_oauth_client_secret
-        if not client_secret:
-            raise ValidationError('OAuth client secret not configured for this business')
-        redirect_uri = f"{settings.OAUTH_BASE_URL}/api/auth/google/callback/"
+        redirect_uri = f"{settings.OAUTH_BASE_URL.rstrip('/')}/api/auth/google/callback/"
         
         token_url = "https://oauth2.googleapis.com/token"
         data = {

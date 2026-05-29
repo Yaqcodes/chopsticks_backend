@@ -167,8 +167,10 @@ class UnifiedOrderSerializer(serializers.ModelSerializer):
                 'items': 'Order must contain at least one item.'
             })
         
-        # Calculate reward discount if reward_id is provided
+        # Calculate reward and promo discounts
         reward_discount = self._calculate_reward_discount(data)
+        promo_discount, promo_obj = self._calculate_promo_discount(data, restaurant_settings)
+        total_discount = reward_discount + promo_discount
         
         # Extract values for validation
         subtotal = Decimal(str(data.get('subtotal', 0)))
@@ -176,8 +178,8 @@ class UnifiedOrderSerializer(serializers.ModelSerializer):
         delivery_fee = Decimal(str(data.get('delivery_fee', 0)))
         total = Decimal(str(data.get('total_amount', 0)))
         
-        # Calculate total with reward discount
-        calculated_total = subtotal + tax + delivery_fee - reward_discount
+        # Calculate total with combined discounts
+        calculated_total = subtotal + tax + delivery_fee - total_discount
         
         if abs(calculated_total - total) > Decimal('0.01'):  # Allow for rounding
             raise serializers.ValidationError({
@@ -186,15 +188,46 @@ class UnifiedOrderSerializer(serializers.ModelSerializer):
         
         # Check discount doesn't exceed order value
         max_discount = subtotal + tax + delivery_fee
-        if reward_discount > max_discount:
+        if total_discount > max_discount:
             raise serializers.ValidationError({
                 'discount_amount': 'Discount cannot exceed order value'
             })
         
-        # Update data with calculated discount
-        data['discount_amount'] = reward_discount
+        # Update data with calculated discount and stash promo for create()
+        data['discount_amount'] = total_discount
+        self._promo_obj = promo_obj
+        self._promo_discount = promo_discount
         
         return data
+    
+    def _calculate_promo_discount(self, data, restaurant_settings):
+        """Calculate discount from promo_code if provided."""
+        promo_code = data.get('promo_code')
+        if not promo_code or not str(promo_code).strip():
+            return Decimal('0.00'), None
+
+        request = self.context.get('request')
+        user = request.user if request else None
+        if not user or not user.is_authenticated:
+            raise serializers.ValidationError({
+                'promo_code': 'Log in to use a promo code.',
+            })
+        guest_email = data.get('customer_email', '')
+        subtotal = Decimal(str(data.get('subtotal', 0)))
+
+        from promotions.services import PromoCodeError, validate_promo_for_checkout
+
+        try:
+            promo_obj, discount = validate_promo_for_checkout(
+                promo_code,
+                subtotal,
+                restaurant_settings,
+                user=user,
+                guest_email=guest_email,
+            )
+            return discount, promo_obj
+        except PromoCodeError as exc:
+            raise serializers.ValidationError({'promo_code': str(exc)}) from exc
     
     def _calculate_reward_discount(self, data):
         """Calculate discount amount based on reward_id if provided."""
@@ -427,6 +460,19 @@ class UnifiedOrderSerializer(serializers.ModelSerializer):
         
         # Create the order with calculated totals
         order = Order.objects.create(**validated_data)
+        
+        # Record promo usage if a promo was applied
+        promo_obj = getattr(self, '_promo_obj', None)
+        promo_discount = getattr(self, '_promo_discount', Decimal('0.00'))
+        if promo_obj and promo_discount > 0:
+            from promotions.services import record_promo_usage
+            record_promo_usage(
+                promo_obj,
+                order,
+                promo_discount,
+                user=validated_data.get('user'),
+                guest_email=customer_email,
+            )
         
         # Apply reward if reward_id was provided
         if reward_id and request and request.user.is_authenticated:
@@ -1343,8 +1389,16 @@ class CartCalculationSerializer(serializers.Serializer):
     items = CartItemSerializer(many=True)
     delivery_type = serializers.ChoiceField(choices=Order.DELIVERY_TYPE_CHOICES, default='delivery')
     delivery_fee = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=0, help_text='Delivery fee amount (0 for pickup orders)')
-    promotion_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    promo_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    promotion_code = serializers.CharField(required=False, allow_blank=True, allow_null=True, help_text='Deprecated alias for promo_code')
+    customer_email = serializers.EmailField(required=False, allow_blank=True, help_text='Guest email for promo usage checks')
     reward_id = serializers.IntegerField(required=False, allow_null=True, help_text='UserReward ID to apply')
+    
+    def validate(self, attrs):
+        """Accept legacy promotion_code alias."""
+        if not attrs.get('promo_code') and attrs.get('promotion_code'):
+            attrs['promo_code'] = attrs['promotion_code']
+        return attrs
     
     def validate_items(self, value):
         """Validate cart items."""

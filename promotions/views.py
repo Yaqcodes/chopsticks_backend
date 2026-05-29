@@ -140,15 +140,19 @@ def apply_promo_to_order(request, order_id):
     
     # Apply discount to order
     order.discount_amount += discount_amount
-    order.calculate_totals()
+    order.total_amount = (
+        order.subtotal + order.tax_amount + order.delivery_fee - order.discount_amount
+    )
     order.save()
     
     # Create usage record
-    PromoCodeUsage.objects.create(
-        promo_code=promo_code,
+    from promotions.services import record_promo_usage
+    record_promo_usage(
+        promo_code,
+        order,
+        discount_amount,
         user=request.user,
-        order=order,
-        discount_amount=discount_amount
+        guest_email=order.guest_email,
     )
     
     return Response({

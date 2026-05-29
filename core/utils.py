@@ -69,6 +69,10 @@ def get_business_from_request(request):
             "Frontend domain must be sent in request headers for business identification."
         )
 
+    from django.conf import settings as django_settings
+    if django_settings.DEBUG and frontend_domain == '127.0.0.1':
+        frontend_domain = 'localhost'
+
     # Try exact domain match first
     try:
         return RestaurantSettings.objects.get(domain=frontend_domain)

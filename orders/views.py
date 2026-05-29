@@ -10,6 +10,7 @@ from decimal import Decimal
 from datetime import datetime
 
 from core.utils import get_business_from_request
+from promotions.services import PromoCodeError
 from .models import Order, OrderItem
 from .serializers import (
     OrderSerializer, OrderListSerializer, OrderDetailSerializer,
@@ -371,18 +372,26 @@ def calculate_cart_totals_view(request):
     
     try:
         restaurant_settings = get_business_from_request(request)
+        promo_code = validated_data.get('promo_code') or validated_data.get('promotion_code')
         totals = calculate_cart_totals(
             cart_items=cart_items_with_prices,
             delivery_type=validated_data['delivery_type'],
             delivery_fee=validated_data['delivery_fee'],
-            promo_code=validated_data.get('promotion_code'),
+            promo_code=promo_code,
             user_reward=user_reward,
-            restaurant_settings=restaurant_settings
+            restaurant_settings=restaurant_settings,
+            user=request.user if request.user.is_authenticated else None,
+            guest_email=validated_data.get('customer_email') or None,
         )
 
         
         return Response(totals)
     
+    except PromoCodeError as e:
+        return Response({
+            'error': str(e),
+            'code': e.code,
+        }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         return Response({
             'error': str(e)

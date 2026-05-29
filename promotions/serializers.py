@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import PromoCode, PromoCodeUsage
+from .services import PromoCodeError, normalize_promo_code, validate_promo_for_checkout
 
 
 class PromoCodeSerializer(serializers.ModelSerializer):
@@ -24,62 +25,36 @@ class PromoCodeValidationSerializer(serializers.Serializer):
     
     code = serializers.CharField(max_length=20)
     order_amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    guest_email = serializers.EmailField(required=False, allow_blank=True)
     
     def validate_code(self, value):
-        """Validate that the promo code exists and is valid for the current business."""
-        from core.utils import get_business_from_request
-        
-        try:
-            restaurant_settings = get_business_from_request(self.context['request'])
-            promo_code = PromoCode.objects.get(
-                code=value.upper(),
-                restaurant_settings=restaurant_settings
-            )
-        except PromoCode.DoesNotExist:
-            raise serializers.ValidationError("Invalid promotional code.")
-        except ValueError as e:
-            raise serializers.ValidationError(f"Business identification failed: {str(e)}")
-        
-        if not promo_code.is_valid:
-            raise serializers.ValidationError("This promotional code is not currently valid.")
-        
-        return value
+        return normalize_promo_code(value) or value
     
     def validate(self, attrs):
-        """Validate promo code for the specific order and user (business-scoped)."""
+        """Validate promo code for the specific order and customer (business-scoped)."""
         from core.utils import get_business_from_request
         
         code = attrs['code']
         order_amount = attrs['order_amount']
-        user = self.context['request'].user
+        request = self.context['request']
+        user = request.user
+        guest_email = attrs.get('guest_email') or None
         
         try:
-            restaurant_settings = get_business_from_request(self.context['request'])
-            promo_code = PromoCode.objects.get(
-                code=code.upper(),
-                restaurant_settings=restaurant_settings
+            restaurant_settings = get_business_from_request(request)
+            promo_code, discount_amount = validate_promo_for_checkout(
+                code,
+                order_amount,
+                restaurant_settings,
+                user=user if user.is_authenticated else None,
+                guest_email=guest_email,
             )
-            
-            # Check if valid for user
-            if not promo_code.is_valid_for_user(user):
-                raise serializers.ValidationError("This promotional code is not valid for you.")
-            
-            # Check minimum order amount
-            if order_amount < promo_code.minimum_order_amount:
-                raise serializers.ValidationError(
-                    f"Minimum order amount of ${promo_code.minimum_order_amount} required for this code."
-                )
-            
-            # Calculate discount
-            discount_amount = promo_code.calculate_discount(order_amount)
-            
             attrs['promo_code'] = promo_code
             attrs['discount_amount'] = discount_amount
-            
-        except PromoCode.DoesNotExist:
-            raise serializers.ValidationError("Invalid promotional code.")
-        except ValueError as e:
-            raise serializers.ValidationError(f"Business identification failed: {str(e)}")
+        except PromoCodeError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+        except ValueError as exc:
+            raise serializers.ValidationError(f'Business identification failed: {exc}') from exc
         
         return attrs
 
@@ -94,7 +69,7 @@ class PromoCodeUsageSerializer(serializers.ModelSerializer):
     class Meta:
         model = PromoCodeUsage
         fields = [
-            'id', 'promo_code', 'promo_code_code', 'user', 'user_email',
+            'id', 'promo_code', 'promo_code_code', 'user', 'user_email', 'guest_email',
             'order', 'order_number', 'discount_amount', 'used_at'
         ]
         read_only_fields = [

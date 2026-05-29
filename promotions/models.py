@@ -60,22 +60,27 @@ class PromoCode(models.Model):
         
         return True
     
-    def is_valid_for_user(self, user):
-        """Check if promo code is valid for a specific user."""
+    def is_valid_for_customer(self, user=None, guest_email=None):
+        """Check if promo code is valid for a user or guest email."""
         if not self.is_valid:
             return False
-        
-        # Check if user has already used this code
-        if user.is_authenticated:
-            usage_count = PromoCodeUsage.objects.filter(
-                promo_code=self,
-                user=user
-            ).count()
-            
-            if usage_count > 0:
+
+        if user and user.is_authenticated:
+            if PromoCodeUsage.objects.filter(promo_code=self, user=user).exists():
                 return False
-        
+        elif guest_email:
+            email = guest_email.strip().lower()
+            if email and PromoCodeUsage.objects.filter(
+                promo_code=self,
+                guest_email__iexact=email,
+            ).exists():
+                return False
+
         return True
+
+    def is_valid_for_user(self, user):
+        """Backward-compatible alias for authenticated user checks."""
+        return self.is_valid_for_customer(user=user)
     
     def calculate_discount(self, order_amount):
         """Calculate discount amount for given order amount."""
@@ -101,7 +106,14 @@ class PromoCodeUsage(models.Model):
     """Track promo code usage by users."""
     
     promo_code = models.ForeignKey(PromoCode, on_delete=models.CASCADE, related_name='usages')
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='promo_code_usages')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='promo_code_usages',
+        null=True,
+        blank=True,
+    )
+    guest_email = models.EmailField(blank=True, default='')
     order = models.ForeignKey('orders.Order', on_delete=models.CASCADE, related_name='promo_code_usages')
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2)
     used_at = models.DateTimeField(auto_now_add=True)
@@ -111,7 +123,8 @@ class PromoCodeUsage(models.Model):
         unique_together = ['promo_code', 'order']
     
     def __str__(self):
-        return f"{self.promo_code.code} used by {self.user.email} on {self.order.order_number}"
+        customer = self.user.email if self.user else (self.guest_email or 'Guest')
+        return f"{self.promo_code.code} used by {customer} on {self.order.order_number}"
     
     def save(self, *args, **kwargs):
         # Increment usage count on promo code

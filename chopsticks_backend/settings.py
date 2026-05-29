@@ -371,8 +371,14 @@ GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
 
 # OAuth base URL - defaults to BACKEND_BASE_URL (can be overridden via OAUTH_BASE_URL env var).
 # OAuth credentials are business-specific (stored on RestaurantSettings); this is just the
-# host that providers redirect back to. Empty in local dev is fine — providers won't be hit.
+# host that providers redirect back to.
 OAUTH_BASE_URL = _normalize_base_url(config('OAUTH_BASE_URL', default=BACKEND_BASE_URL))
+if DEBUG and not OAUTH_BASE_URL:
+    OAUTH_BASE_URL = 'http://localhost:8000'
+
+# Fallback Google OAuth credentials for local dev (also copied to tenants via seed_dev_customer)
+SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = config('SOCIAL_AUTH_GOOGLE_OAUTH2_KEY', default='')
+SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = config('SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET', default='')
 
 SOCIAL_AUTH_FACEBOOK_KEY = config('SOCIAL_AUTH_FACEBOOK_KEY', default='')
 SOCIAL_AUTH_FACEBOOK_SECRET = config('SOCIAL_AUTH_FACEBOOK_SECRET', default='')
