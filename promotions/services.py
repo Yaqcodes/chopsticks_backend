@@ -59,8 +59,15 @@ def validate_promo_for_checkout(
     if not promo.is_valid:
         raise PromoCodeError('This promotional code is not currently valid.', 'expired')
 
+    if promo.customer_usage_limit_reached(user=user, guest_email=guest_email):
+        if promo.usage_limit == 1:
+            message = 'You have already used this promotional code.'
+        else:
+            message = f'You have reached the limit of {promo.usage_limit} uses for this promotional code.'
+        raise PromoCodeError(message, 'usage_limit_reached')
+
     if not promo.is_valid_for_customer(user=user, guest_email=guest_email):
-        raise PromoCodeError('This promotional code is not valid for you.', 'already_used')
+        raise PromoCodeError('This promotional code is not valid for you.', 'invalid_for_customer')
 
     order_amount = Decimal(str(order_amount))
     if order_amount < promo.minimum_order_amount:

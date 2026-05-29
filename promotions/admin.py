@@ -56,7 +56,10 @@ class PromoCodeAdmin(ModelAdmin):
     fieldsets = (
         ('Business', {'fields': ('restaurant_settings',)}),
         ('Basic Information', {'fields': ('code', 'description', 'discount_type', 'discount_value')}),
-        ('Usage Limits', {'fields': ('minimum_order_amount', 'maximum_discount', 'usage_limit', 'current_usage')}),
+        ('Usage Limits', {
+            'fields': ('minimum_order_amount', 'maximum_discount', 'usage_limit', 'current_usage'),
+            'description': 'Usage limit is per customer (0 = unlimited per customer). Total redemptions is informational.',
+        }),
         ('Validity', {'fields': ('is_active', 'valid_from', 'valid_until')}),
     )
 
@@ -86,7 +89,10 @@ class ZmallPromoCodeAdmin(BusinessAdminMixin, ModelAdmin):
 
     fieldsets = (
         ('Basic Information', {'fields': ('code', 'description', 'discount_type', 'discount_value')}),
-        ('Usage Limits', {'fields': ('minimum_order_amount', 'maximum_discount', 'usage_limit', 'current_usage')}),
+        ('Usage Limits', {
+            'fields': ('minimum_order_amount', 'maximum_discount', 'usage_limit', 'current_usage'),
+            'description': 'Usage limit is per customer (0 = unlimited per customer). Total redemptions is informational.',
+        }),
         ('Validity', {'fields': ('is_active', 'valid_from', 'valid_until')}),
     )
 

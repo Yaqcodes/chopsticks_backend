@@ -28,8 +28,14 @@ class PromoCode(models.Model):
     minimum_order_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     maximum_discount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     is_active = models.BooleanField(default=True)
-    usage_limit = models.PositiveIntegerField(default=0, help_text='0 for unlimited')
-    current_usage = models.PositiveIntegerField(default=0)
+    usage_limit = models.PositiveIntegerField(
+        default=0,
+        help_text='Maximum uses per customer (0 for unlimited per customer). Not a global cap.',
+    )
+    current_usage = models.PositiveIntegerField(
+        default=0,
+        help_text='Total redemptions across all customers (informational only).',
+    )
     valid_from = models.DateTimeField()
     valid_until = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -55,28 +61,37 @@ class PromoCode(models.Model):
         if self.valid_until and self.valid_until < now:
             return False
         
-        if self.usage_limit > 0 and self.current_usage >= self.usage_limit:
-            return False
-        
         return True
     
+    def get_customer_usage_count(self, user=None, guest_email=None):
+        """Count how many times a customer has redeemed this promo."""
+        if user and getattr(user, 'is_authenticated', False):
+            return PromoCodeUsage.objects.filter(promo_code=self, user=user).count()
+        if guest_email:
+            email = guest_email.strip().lower()
+            if email:
+                return PromoCodeUsage.objects.filter(
+                    promo_code=self,
+                    guest_email__iexact=email,
+                ).count()
+        return 0
+    
     def is_valid_for_customer(self, user=None, guest_email=None):
-        """Check if promo code is valid for a user or guest email."""
+        """Check per-customer usage limits (usage_limit=0 means unlimited per customer)."""
         if not self.is_valid:
             return False
 
-        if user and user.is_authenticated:
-            if PromoCodeUsage.objects.filter(promo_code=self, user=user).exists():
-                return False
-        elif guest_email:
-            email = guest_email.strip().lower()
-            if email and PromoCodeUsage.objects.filter(
-                promo_code=self,
-                guest_email__iexact=email,
-            ).exists():
-                return False
+        usage_count = self.get_customer_usage_count(user=user, guest_email=guest_email)
+        if self.usage_limit > 0 and usage_count >= self.usage_limit:
+            return False
 
         return True
+    
+    def customer_usage_limit_reached(self, user=None, guest_email=None):
+        """True when this customer has hit their personal usage cap."""
+        if self.usage_limit <= 0:
+            return False
+        return self.get_customer_usage_count(user=user, guest_email=guest_email) >= self.usage_limit
 
     def is_valid_for_user(self, user):
         """Backward-compatible alias for authenticated user checks."""
