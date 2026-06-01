@@ -54,22 +54,22 @@ class BusinessAdminSite(UnfoldAdminSite):
         2. Try name containing business identifier (case-insensitive)
         3. Returns None if no match found
         """
+        if getattr(self, '_business_settings_resolved', False):
+            return self._business_settings_cache
+
         # Try domain match (flexible - handles various domain formats)
         business_settings = RestaurantSettings.objects.filter(
             domain__icontains=self.business_identifier
         ).first()
-        if business_settings:
-            return business_settings
-        
-        # Fallback: try to get by name (case-insensitive)
-        business_settings = RestaurantSettings.objects.filter(
-            name__icontains=self.business_identifier.capitalize()
-        ).first()
-        if business_settings:
-            return business_settings
-        
-        # If still no match, return None (admin will show empty tables)
-        return None
+        if not business_settings:
+            # Fallback: try to get by name (case-insensitive)
+            business_settings = RestaurantSettings.objects.filter(
+                name__icontains=self.business_identifier.capitalize()
+            ).first()
+
+        self._business_settings_resolved = True
+        self._business_settings_cache = business_settings
+        return business_settings
     
     def get_roschi_settings(self):
         """

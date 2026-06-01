@@ -1,10 +1,10 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.forms import DateInput
+from core.main_admin_site import main_admin_site
 from .models import User, SocialAccount
 
 
-@admin.register(User)
 class UserAdmin(BaseUserAdmin):
     """Custom User admin interface."""
     
@@ -37,6 +37,9 @@ class UserAdmin(BaseUserAdmin):
                 'class': 'vDateField'
             })
         return form
+
+
+main_admin_site.register(User, UserAdmin)
 
 
 @admin.register(SocialAccount)

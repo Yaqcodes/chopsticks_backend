@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin, TabularInline
+from menu.models import MenuItem
 from .models import Order, OrderItem
 from .services import set_order_status
 from utils.tasks import schedule_order_status_update_email, schedule_order_status_update_emails
@@ -64,7 +65,26 @@ class BusinessAdminMixin:
 
 
 def _order_item_inline_all_readonly():
-    return ('menu_item', 'quantity', 'unit_price', 'total_price', 'special_instructions')
+    return ('menu_item_display', 'quantity', 'unit_price', 'total_price', 'special_instructions')
+
+
+def _menu_item_label(menu_item):
+    if not menu_item:
+        return '—'
+    label = menu_item.name
+    barcode = getattr(menu_item, 'barcode', None)
+    if barcode:
+        label = f'{label} ({barcode})'
+    return label
+
+
+def _scoped_menu_item_queryset(business_settings=None, restaurant_settings_id=None):
+    qs = MenuItem.objects.all()
+    if business_settings is not None:
+        qs = qs.filter(restaurant_settings=business_settings)
+    elif restaurant_settings_id:
+        qs = qs.filter(restaurant_settings_id=restaurant_settings_id)
+    return qs.order_by('name')
 
 
 def _delivery_address_for_display(order):
@@ -103,13 +123,51 @@ class OrderItemInline(admin.TabularInline):
     
     model = OrderItem
     extra = 0
-    readonly_fields = ['total_price']
+    readonly_fields = ['total_price', 'menu_item_display']
     fields = ['menu_item', 'quantity', 'unit_price', 'total_price', 'special_instructions']
+    autocomplete_fields = ['menu_item']
+
+    def menu_item_display(self, obj):
+        if not obj or not obj.menu_item_id:
+            return '—'
+        return _menu_item_label(obj.menu_item)
+    menu_item_display.short_description = 'Product'
+
+    def get_fields(self, request, obj=None):
+        if request.user.is_superuser:
+            return list(self.fields)
+        return ['menu_item_display', 'quantity', 'unit_price', 'total_price', 'special_instructions']
 
     def get_readonly_fields(self, request, obj=None):
         if request.user.is_superuser:
             return list(self.readonly_fields)
         return list(_order_item_inline_all_readonly())
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('menu_item')
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'menu_item':
+            kwargs['queryset'] = MenuItem.objects.none()
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def get_formset(self, request, obj=None, **kwargs):
+        FormSet = super().get_formset(request, obj, **kwargs)
+        restaurant_settings_id = obj.restaurant_settings_id if obj else None
+
+        if not restaurant_settings_id:
+            return FormSet
+
+        menu_item_qs = _scoped_menu_item_queryset(restaurant_settings_id=restaurant_settings_id)
+
+        class OrderItemFormSet(FormSet):
+            def __init__(self, *args, **kw):
+                super().__init__(*args, **kw)
+                for form in self.forms:
+                    if 'menu_item' in form.fields:
+                        form.fields['menu_item'].queryset = menu_item_qs
+
+        return OrderItemFormSet
 
     def has_add_permission(self, request, obj=None):
         return request.user.is_superuser
@@ -118,7 +176,6 @@ class OrderItemInline(admin.TabularInline):
         return request.user.is_superuser
 
 
-@admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     """Admin interface for Order model."""
     
@@ -135,6 +192,7 @@ class OrderAdmin(admin.ModelAdmin):
         'guest_email', 'guest_name'
     ]
     ordering = ['-created_at']
+    autocomplete_fields = ['user', 'restaurant_settings']
     readonly_fields = [
         'order_number', 'subtotal', 'tax_amount', 'total_amount', 
         'created_at', 'updated_at', 'delivery_address_display'
@@ -217,7 +275,6 @@ class OrderAdmin(admin.ModelAdmin):
     mark_as_delivered.short_description = "Mark selected orders as delivered"
 
 
-@admin.register(OrderItem)
 class OrderItemAdmin(admin.ModelAdmin):
     """Admin interface for OrderItem model."""
     
@@ -256,30 +313,51 @@ class RoschiOrderItemInline(TabularInline):
     
     model = OrderItem
     extra = 0
-    readonly_fields = ['total_price', 'get_barcode']
+    readonly_fields = ['total_price', 'get_barcode', 'menu_item_display']
     fields = ['menu_item', 'get_barcode', 'quantity', 'unit_price', 'total_price']
+    autocomplete_fields = ['menu_item']
     verbose_name = "Product"
     verbose_name_plural = "Products in This Order"
+
+    def menu_item_display(self, obj):
+        if not obj or not obj.menu_item_id:
+            return '—'
+        return _menu_item_label(obj.menu_item)
+    menu_item_display.short_description = 'Product'
 
     def get_barcode(self, obj):
         barcode = getattr(obj.menu_item, 'barcode', None) if obj.menu_item_id else None
         return barcode or '—'
     get_barcode.short_description = 'Barcode'
 
+    def get_fields(self, request, obj=None):
+        if request.user.is_superuser:
+            return list(self.fields)
+        return ['menu_item_display', 'get_barcode', 'quantity', 'unit_price', 'total_price']
+
     def get_readonly_fields(self, request, obj=None):
         if request.user.is_superuser:
             return list(self.readonly_fields)
-        return ['menu_item', 'get_barcode', 'quantity', 'unit_price', 'total_price']
+        return ['menu_item_display', 'get_barcode', 'quantity', 'unit_price', 'total_price']
 
     def has_add_permission(self, request, obj=None):
         return request.user.is_superuser
 
     def has_delete_permission(self, request, obj=None):
         return request.user.is_superuser
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'menu_item':
+            business_settings = self._get_business_settings()
+            if business_settings:
+                kwargs['queryset'] = _scoped_menu_item_queryset(business_settings=business_settings)
+            else:
+                kwargs['queryset'] = MenuItem.objects.none()
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
     
     def get_queryset(self, request):
         """Filter order items to only show items for this business."""
-        qs = super().get_queryset(request)
+        qs = super().get_queryset(request).select_related('menu_item')
         business_settings = self._get_business_settings()
         if business_settings:
             return qs.filter(order__restaurant_settings=business_settings)
