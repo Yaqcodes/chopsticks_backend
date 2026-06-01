@@ -11,6 +11,8 @@ from django.core.exceptions import ValidationError
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
+from accounts.oauth_profile import normalize_oauth_names
+
 
 def resolve_oauth_credentials(restaurant_settings):
     """
@@ -73,13 +75,19 @@ def validate_google_oauth_token(access_token, restaurant_settings):
         if id_info['aud'] != client_id:
             raise ValidationError('Invalid token audience')
             
+        first_name, last_name = normalize_oauth_names(
+            id_info.get('given_name', ''),
+            id_info.get('family_name', ''),
+            id_info.get('name', ''),
+        )
         return {
             'provider_user_id': id_info['sub'],
             'email': id_info['email'],
-            'first_name': id_info.get('given_name', ''),
-            'last_name': id_info.get('family_name', ''),
+            'first_name': first_name,
+            'last_name': last_name,
+            'full_name': id_info.get('name', ''),
             'avatar_url': id_info.get('picture', ''),
-            'email_verified': id_info.get('email_verified', False)
+            'email_verified': id_info.get('email_verified', False),
         }
         
     except Exception as e:
@@ -93,13 +101,19 @@ def validate_google_oauth_token(access_token, restaurant_settings):
             
             user_data = response.json()
             
+            first_name, last_name = normalize_oauth_names(
+                user_data.get('given_name', ''),
+                user_data.get('family_name', ''),
+                user_data.get('name', ''),
+            )
             return {
                 'provider_user_id': user_data['id'],
                 'email': user_data['email'],
-                'first_name': user_data.get('given_name', ''),
-                'last_name': user_data.get('family_name', ''),
+                'first_name': first_name,
+                'last_name': last_name,
+                'full_name': user_data.get('name', ''),
                 'avatar_url': user_data.get('picture', ''),
-                'email_verified': user_data.get('verified_email', False)
+                'email_verified': user_data.get('verified_email', False),
             }
             
         except requests.RequestException as req_error:

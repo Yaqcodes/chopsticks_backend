@@ -2,6 +2,25 @@ from django.contrib import admin
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin, TabularInline
 from .models import Order, OrderItem
+from .services import set_order_status
+from utils.tasks import schedule_order_status_update_email, schedule_order_status_update_emails
+
+
+def _apply_bulk_order_status(queryset, new_status):
+    pending_emails = []
+    updated = 0
+    for order in queryset.select_related('restaurant_settings', 'user'):
+        if set_order_status(order, new_status, notify=False):
+            updated += 1
+            if order.get_customer_email():
+                pending_emails.append((order.id, new_status))
+    schedule_order_status_update_emails(pending_emails)
+    return updated
+
+
+def _notify_order_status_if_changed(obj, old_status):
+    if old_status is not None and old_status != obj.status and obj.get_customer_email():
+        schedule_order_status_update_email(obj.id, obj.status)
 from core.admin_sites import roschi_admin_site, chopsticks_admin_site, zmall_admin_site
 from core.main_admin_site import main_admin_site
 
@@ -163,30 +182,37 @@ class OrderAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         """Optimize queryset with select_related for better performance."""
         return super().get_queryset(request).select_related('user', 'restaurant_settings')
+
+    def save_model(self, request, obj, form, change):
+        old_status = None
+        if change and obj.pk and 'status' in form.changed_data:
+            old_status = Order.objects.filter(pk=obj.pk).values_list('status', flat=True).first()
+        super().save_model(request, obj, form, change)
+        _notify_order_status_if_changed(obj, old_status)
     
     actions = ['mark_as_confirmed', 'mark_as_preparing', 'mark_as_ready', 'mark_as_delivered']
     
     def mark_as_confirmed(self, request, queryset):
         """Mark selected orders as confirmed."""
-        updated = queryset.update(status='confirmed')
+        updated = _apply_bulk_order_status(queryset, 'confirmed')
         self.message_user(request, f'{updated} orders marked as confirmed.')
     mark_as_confirmed.short_description = "Mark selected orders as confirmed"
     
     def mark_as_preparing(self, request, queryset):
         """Mark selected orders as preparing."""
-        updated = queryset.update(status='preparing')
+        updated = _apply_bulk_order_status(queryset, 'preparing')
         self.message_user(request, f'{updated} orders marked as preparing.')
     mark_as_preparing.short_description = "Mark selected orders as preparing"
     
     def mark_as_ready(self, request, queryset):
         """Mark selected orders as ready."""
-        updated = queryset.update(status='ready')
+        updated = _apply_bulk_order_status(queryset, 'ready')
         self.message_user(request, f'{updated} orders marked as ready.')
     mark_as_ready.short_description = "Mark selected orders as ready"
     
     def mark_as_delivered(self, request, queryset):
         """Mark selected orders as delivered."""
-        updated = queryset.update(status='delivered')
+        updated = _apply_bulk_order_status(queryset, 'delivered')
         self.message_user(request, f'{updated} orders marked as delivered.')
     mark_as_delivered.short_description = "Mark selected orders as delivered"
 
@@ -396,11 +422,15 @@ class RoschiOrderAdmin(BusinessAdminMixin, ModelAdmin):
     
     def save_model(self, request, obj, form, change):
         """Ensure business settings is set to this business."""
+        old_status = None
+        if change and obj.pk and 'status' in form.changed_data:
+            old_status = Order.objects.filter(pk=obj.pk).values_list('status', flat=True).first()
         if not obj.restaurant_settings_id:
             business_settings = self._get_business_settings()
             if business_settings:
                 obj.restaurant_settings = business_settings
         super().save_model(request, obj, form, change)
+        _notify_order_status_if_changed(obj, old_status)
     
     def _get_business_settings(self):
         """Get business settings from the current admin site."""
@@ -412,25 +442,25 @@ class RoschiOrderAdmin(BusinessAdminMixin, ModelAdmin):
     
     def mark_as_confirmed(self, request, queryset):
         """Mark selected orders as confirmed."""
-        updated = queryset.update(status='confirmed')
+        updated = _apply_bulk_order_status(queryset, 'confirmed')
         self.message_user(request, f'{updated} orders marked as confirmed.')
     mark_as_confirmed.short_description = "Mark selected orders as confirmed"
     
     def mark_as_preparing(self, request, queryset):
         """Mark selected orders as preparing."""
-        updated = queryset.update(status='preparing')
+        updated = _apply_bulk_order_status(queryset, 'preparing')
         self.message_user(request, f'{updated} orders marked as preparing.')
     mark_as_preparing.short_description = "Mark selected orders as preparing"
     
     def mark_as_ready(self, request, queryset):
         """Mark selected orders as ready."""
-        updated = queryset.update(status='ready')
+        updated = _apply_bulk_order_status(queryset, 'ready')
         self.message_user(request, f'{updated} orders marked as ready.')
     mark_as_ready.short_description = "Mark selected orders as ready"
     
     def mark_as_delivered(self, request, queryset):
         """Mark selected orders as delivered."""
-        updated = queryset.update(status='delivered')
+        updated = _apply_bulk_order_status(queryset, 'delivered')
         self.message_user(request, f'{updated} orders marked as delivered.')
     mark_as_delivered.short_description = "Mark selected orders as delivered"
 

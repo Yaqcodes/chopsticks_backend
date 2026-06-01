@@ -104,14 +104,27 @@ def process_referral_bonus(user, referral_code, restaurant_settings):
             restaurant_settings=restaurant_settings
         )
         user_points.add_points(bonus_points, f"Referral Bonus from {referring_user.referral_code}")
-        
+        from utils.tasks import schedule_points_earned_email
+        schedule_points_earned_email(
+            user,
+            restaurant_settings,
+            bonus_points,
+            f'Referral Bonus from {referring_user.referral_code}',
+        )
+
         # Award to referring user
         referring_points, created = UserPoints.objects.get_or_create(
             user=referring_user,
             restaurant_settings=restaurant_settings
         )
         referring_points.add_points(bonus_points, f"Referral Bonus for {user.referral_code}")
-        
+        schedule_points_earned_email(
+            referring_user,
+            restaurant_settings,
+            bonus_points,
+            f'Referral Bonus for {user.referral_code}',
+        )
+
         return True
     
     except User.DoesNotExist:
@@ -265,11 +278,13 @@ def award_points_for_physical_visit(user, restaurant_settings, visit_amount=None
         
         reason = " - ".join(reason_parts)
         user_points.add_points(total_points, reason)
-        
+        from utils.tasks import schedule_points_earned_email
+        schedule_points_earned_email(user, restaurant_settings, total_points, reason)
+
         # Transaction record is created by add_points method with business context
-        
+
         return total_points
-    
+
     except Exception as e:
         # Log error but don't fail the scan
         print(f"Error awarding points for physical visit for user {user.email}: {str(e)}")

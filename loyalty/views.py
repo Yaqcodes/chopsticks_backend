@@ -232,7 +232,16 @@ def redeem_reward(request):
             # Update reward redemption count
             reward.current_redemptions += 1
             reward.save()
-            
+
+            from utils.tasks import enqueue_after_commit, send_reward_redemption_task
+            enqueue_after_commit(
+                send_reward_redemption_task,
+                user.id,
+                restaurant_settings.id,
+                reward.id,
+                reward.points_required,
+            )
+
             return Response({
                 'message': 'Reward redeemed successfully.',
                 'user_reward': UserRewardSerializer(user_reward).data,

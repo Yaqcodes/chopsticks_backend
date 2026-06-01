@@ -8,16 +8,19 @@ Single Django service serving all tenants (Chopsticks & Bowls, Roschi Water, Zma
 
 ## 1. Provision services in Railway
 
-In the Railway project, create three services:
+In the Railway project, create these resources:
 
-1. **Django service** - this repo, branch `railway`. Procfile + `runtime.txt` are detected by Nixpacks automatically.
+1. **Django service** (web) — this repo, branch `railway`. Procfile + `runtime.txt` are detected by Nixpacks automatically.
 2. **PostgreSQL** plugin.
 3. **Bucket** (Storage Bucket, S3-compatible).
+4. **Redis** — **+ New → Database → Redis** (Celery broker).
+5. **Worker service** (optional second deploy from the same repo) — see [Transactional email](#10-transactional-email-brevo--celery).
 
-Then **link** the database and bucket to the Django service:
+Then **link** the database, bucket, and Redis to the Django service:
 
 - Postgres -> Connect: injects private `DATABASE_URL` (`${{Postgres.DATABASE_URL}}`) and public `DATABASE_PUBLIC_URL` (`${{Postgres.DATABASE_PUBLIC_URL}}`). **Do not run `migrate` during image build** — private DNS (`postgres.railway.internal`) is unavailable there.
 - Bucket -> Connect: choose the Django service. Railway injects `BUCKET`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `ENDPOINT`, `REGION`. Settings auto-detect them and switch the storage backend.
+- Redis -> Connect: injects `REDIS_URL` (used by Celery). Use **Shared Variables** so the worker service gets the same value.
 
 ---
 
@@ -36,6 +39,10 @@ Copy values from [`.env.railway.template`](./.env.railway.template) into the Dja
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | private host; used at **container start** |
 | `DATABASE_PUBLIC_URL` | `${{Postgres.DATABASE_PUBLIC_URL}}` | optional; for `manage.py migrate` from your laptop |
 | `BUCKET` / `ACCESS_KEY_ID` / `SECRET_ACCESS_KEY` / `ENDPOINT` / `REGION` | Bucket link | Railway-injected |
+| `REDIS_URL` | `${{Redis.REDIS_URL}}` | Celery broker (web + worker) |
+| `BREVO_API_KEY` | Brevo dashboard (v3 API key) | Transactional email |
+| `DEFAULT_FROM_EMAIL` | `noreply@ecommerce.thestringtheorylabs.com` | Must match verified Brevo sender |
+| `EMAIL_BACKEND` | `anymail.backends.brevo.EmailBackend` | When `BREVO_API_KEY` is set |
 
 When the Railway public URL is not yet known (first deploy), set `BASE_URL` to a placeholder, deploy, copy the assigned `*.up.railway.app` URL, then update `BASE_URL` and redeploy. After cutover to a custom domain (e.g. `https://api.zmall.ng`), only `BASE_URL` and `ALLOWED_HOSTS` need to change in Railway plus the OAuth/Paystack dashboards. No code change.
 
@@ -130,3 +137,52 @@ When `api.<brand>.ng` is ready:
 - [ ] Google OAuth round-trips through `BASE_URL`.
 - [ ] Paystack init/callback round-trips on a test transaction.
 - [ ] `DEBUG=False` is enforced; security headers (HSTS, content-type-nosniff) appear in the response.
+- [ ] `python manage.py sendtestemail you@example.com` delivers via Brevo (after DNS + API key configured).
+- [ ] Test Paystack payment sends **one** order confirmation email (`confirmation_email_sent_at` set on order).
+- [ ] Admin order status change (bulk or single edit) sends status update email.
+- [ ] Password reset from a tenant frontend uses that tenant's domain in the reset link.
+- [ ] Celery worker service logs show tasks consumed from the `email` queue.
+
+---
+
+## 10. Transactional email (Brevo + Celery)
+
+Outbound mail uses **Brevo** (django-anymail) and **Celery** so Paystack webhooks are not blocked by SMTP latency.
+
+### Brevo + Cloudflare DNS
+
+1. In [Brevo](https://www.brevo.com): **SMTP & API → API Keys** → create a **v3** key (not SMTP key).
+2. **Senders & Domains** → add **`ecommerce.thestringtheorylabs.com`**.
+3. In **Cloudflare** DNS for `thestringtheorylabs.com`, add the DKIM/SPF records Brevo provides (subdomain `ecommerce` keeps root MX safe if you use Google Workspace on the apex).
+4. Authenticate the domain in Brevo; confirm sender **`noreply@ecommerce.thestringtheorylabs.com`**.
+
+### Redis + worker on Railway
+
+`railway.toml` only configures the **web** service (migrate, healthcheck). Redis and the worker are provisioned in the dashboard:
+
+1. Add **Redis** and link it to the Django service (`REDIS_URL`).
+2. Create a **second service** from the same GitHub repo/branch:
+   - Name: e.g. `chopsticks-worker`
+   - **Start command:** `celery -A chopsticks_backend worker -l info --concurrency=2 -Q email`
+   - Same **Shared Variables** as web (`SECRET_KEY`, `DATABASE_URL`, `BREVO_API_KEY`, `REDIS_URL`, bucket vars, etc.)
+   - Disable HTTP healthcheck (worker has no HTTP port)
+3. The web service continues to use Procfile `web:`; the worker uses the command above (also defined as `worker:` in the Procfile for reference).
+
+### Local development
+
+Copy from [`.env.railway.template`](./.env.railway.template):
+
+```bash
+BREVO_API_KEY=xkeysib-...
+DEFAULT_FROM_EMAIL=noreply@ecommerce.thestringtheorylabs.com
+EMAIL_BACKEND=anymail.backends.brevo.EmailBackend
+REDIS_URL=redis://localhost:6379/0   # optional; omit for sync tasks in DEBUG
+```
+
+Without `REDIS_URL` and with `DEBUG=True`, `CELERY_TASK_ALWAYS_EAGER` runs email tasks synchronously (no separate worker process).
+
+Run worker locally (optional):
+
+```bash
+celery -A chopsticks_backend worker -l info -Q email
+```

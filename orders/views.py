@@ -294,9 +294,9 @@ def cancel_order(request, order_id):
             'error': 'Order cannot be cancelled in its current status.'
         }, status=status.HTTP_400_BAD_REQUEST)
     
-    # Update order status
-    order.status = 'cancelled'
-    order.save()
+    from orders.services import set_order_status
+
+    set_order_status(order, 'cancelled')
     
     return Response({
         'message': 'Order cancelled successfully.',
@@ -458,11 +458,19 @@ def update_order_status(request, order_id):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    # Update order status
-    order.status = serializer.validated_data['status']
-    if serializer.validated_data.get('estimated_delivery_time'):
-        order.estimated_delivery_time = serializer.validated_data['estimated_delivery_time']
-    order.save()
+    from orders.services import set_order_status
+
+    new_status = serializer.validated_data['status']
+    eta = serializer.validated_data.get('estimated_delivery_time')
+    if eta is not None:
+        order.estimated_delivery_time = eta
+
+    if order.status != new_status:
+        set_order_status(order, new_status)
+        if eta is not None:
+            order.save(update_fields=['estimated_delivery_time', 'updated_at'])
+    elif eta is not None:
+        order.save(update_fields=['estimated_delivery_time', 'updated_at'])
     
     return Response({
         'message': 'Order status updated successfully.',

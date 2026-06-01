@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     'django_filters',
     'import_export',
     'drf_yasg',
+    'anymail',
     
     # Local apps
     'accounts',
@@ -357,14 +358,45 @@ SIMPLE_JWT = {
     'TOKEN_TYPE_CLAIM': 'token_type',
 }
 
-# Email settings
-EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
-EMAIL_HOST = config('EMAIL_HOST', default='')
-EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
-EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@chopsticksandbowls.com')
+# Email settings (Brevo via django-anymail when BREVO_API_KEY is set)
+BREVO_API_KEY = config('BREVO_API_KEY', default='')
+DEFAULT_FROM_EMAIL = config(
+    'DEFAULT_FROM_EMAIL',
+    default='noreply@ecommerce.thestringtheorylabs.com',
+)
+if BREVO_API_KEY:
+    EMAIL_BACKEND = config(
+        'EMAIL_BACKEND',
+        default='anymail.backends.brevo.EmailBackend',
+    )
+    ANYMAIL = {
+        'BREVO_API_KEY': BREVO_API_KEY,
+    }
+else:
+    EMAIL_BACKEND = config(
+        'EMAIL_BACKEND',
+        default='django.core.mail.backends.console.EmailBackend',
+    )
+    ANYMAIL = {}
+
+# Set POINTS_EARNED_EMAILS_ENABLED=true to send loyalty points notification emails.
+POINTS_EARNED_EMAILS_ENABLED = config('POINTS_EARNED_EMAILS_ENABLED', default=False, cast=bool)
+
+# Celery (async email and other background tasks)
+REDIS_URL = config('REDIS_URL', default='')
+CELERY_BROKER_URL = config('CELERY_BROKER_URL', default=REDIS_URL or 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default=CELERY_BROKER_URL)
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+CELERY_TASK_DEFAULT_QUEUE = 'email'
+CELERY_TASK_ALWAYS_EAGER = config(
+    'CELERY_TASK_ALWAYS_EAGER',
+    default=not REDIS_URL and DEBUG,
+    cast=bool,
+)
+CELERY_TASK_EAGER_PROPAGATES = True
 
 # Google Maps API
 GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')

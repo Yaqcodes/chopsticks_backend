@@ -159,6 +159,11 @@ class Order(models.Model):
     paystack_reference = models.CharField(max_length=100, blank=True, null=True, unique=True, help_text="Paystack transaction reference")
     paystack_access_code = models.CharField(max_length=100, blank=True, null=True, help_text="Paystack access code for transaction")
     payment_verified_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp when payment was verified")
+    confirmation_email_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when order confirmation email was sent (idempotent).",
+    )
 
     # Inventory: set True when SKU is decremented on payment success; cleared when order is refunded/cancelled
     stock_reduced = models.BooleanField(default=False, help_text="True after payment success reduced menu item SKU; restored on refund/cancel.")
