@@ -181,3 +181,30 @@ def get_frontend_url_from_business(restaurant_settings, request=None):
     if not domain.startswith('http'):
         return f"https://{domain}"
     return domain
+
+
+def get_order_frontend_url(order, request=None):
+    """
+    Deep link to the storefront order history page for a specific order.
+
+    The Zmall frontend opens /orders?order=<order_number> and expands that order.
+    """
+    from urllib.parse import quote
+
+    if not order:
+        return ''
+
+    restaurant_settings = getattr(order, 'restaurant_settings', None)
+    if not restaurant_settings:
+        return ''
+
+    try:
+        base = get_frontend_url_from_business(restaurant_settings, request=request)
+    except ValueError:
+        base = restaurant_settings.website or ''
+
+    if not base:
+        return ''
+
+    order_ref = order.order_number or str(order.pk)
+    return f"{base.rstrip('/')}/orders?order={quote(str(order_ref), safe='')}"

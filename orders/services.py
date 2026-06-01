@@ -42,6 +42,46 @@ def reduce_stock_for_order(order):
     order.stock_reduced = True
 
 
+def finalize_paid_order(order, *, award_loyalty=True):
+    """
+    Post-payment side effects: stock reduction, loyalty points, confirmation email.
+    Call inside an existing atomic() block after order.payment_status is set to 'paid'.
+    """
+    from loyalty.services import award_points_for_order
+    from utils.tasks import enqueue_after_commit, schedule_points_earned_email
+    from utils.tasks import send_order_confirmation_task
+
+    reduce_stock_for_order(order)
+    order.save(update_fields=['stock_reduced'])
+
+    if award_loyalty and order.user:
+        points = award_points_for_order(order)
+        if points:
+            schedule_points_earned_email(
+                order.user,
+                order.restaurant_settings,
+                points,
+                f'Order {order.order_number}',
+            )
+
+    enqueue_after_commit(send_order_confirmation_task, order.id)
+
+
+def set_order_status(order, new_status, *, notify=True):
+    """Update order status and optionally notify the customer by email."""
+    if order.status == new_status:
+        return False
+
+    from utils.tasks import schedule_order_status_update_email
+
+    order.status = new_status
+    order.save(update_fields=['status', 'updated_at'])
+
+    if notify and order.get_customer_email():
+        schedule_order_status_update_email(order.id, new_status)
+    return True
+
+
 def restore_stock_for_order(order):
     """
     Restore MenuItem.sku by adding back each order item's quantity. No-op if not order.stock_reduced.

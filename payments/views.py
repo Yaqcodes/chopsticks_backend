@@ -16,9 +16,7 @@ from core.utils import get_business_from_request, get_frontend_url_from_business
 from .models import Payment
 from .services import PaystackService, PaystackError, PaystackAPIError, PaystackVerificationError
 from orders.models import Order
-from orders.services import reduce_stock_for_order
-from orders.services import InsufficientStockError, validate_order_items
-from loyalty.services import award_points_for_order
+from orders.services import finalize_paid_order, InsufficientStockError, validate_order_items
 from .services import kobo_to_naira
 
 logger = logging.getLogger(__name__)
@@ -202,19 +200,13 @@ def verify_payment(request, reference):
                     order.payment_status = 'paid'
                     order.payment_verified_at = timezone.now()
                     order.save()
-                    
-                    # Decrement menu item SKU (idempotent). Rollback if insufficient stock.
+
                     try:
-                        reduce_stock_for_order(order)
+                        finalize_paid_order(order)
                     except InsufficientStockError as e:
                         logger.warning("Payment verify: insufficient stock for order %s: %s", order.id, e)
                         raise
-                    order.save()
-                    
-                    # Award loyalty points (within transaction)
-                    if order.user:
-                        award_points_for_order(order)
-                    
+
                 else:
                     payment.status = 'failed'
                     order.payment_status = 'failed'
@@ -229,6 +221,24 @@ def verify_payment(request, reference):
             )
         except Exception as e:
             logger.error(f"Error updating payment status in transaction: {str(e)}")
+            # Payment may already be committed; return current state instead of 500.
+            payment.refresh_from_db()
+            order = payment.order
+            if payment.status == 'success' and order.payment_status == 'paid':
+                logger.warning(
+                    'Payment verify post-processing failed for %s; returning paid status',
+                    reference,
+                )
+                return Response({
+                    'status': payment.status,
+                    'paystack_status': payment.paystack_status,
+                    'order_status': order.payment_status,
+                    'order_id': order.id,
+                    'order_number': order.order_number,
+                    'amount': str(payment.amount),
+                    'currency': payment.currency,
+                    'warning': 'post_processing_failed',
+                })
             raise
         
         return Response({
@@ -330,15 +340,9 @@ class PaystackWebhookView(View):
                         order.payment_status = 'paid'
                         order.payment_verified_at = timezone.now()
                         order.save()
-                        
-                        # Decrement menu item SKU (idempotent). Rollback if insufficient stock.
-                        reduce_stock_for_order(order)
-                        order.save()
-                        
-                        # Award loyalty points (within transaction)
-                        if order.user:
-                            award_points_for_order(order)
-                        
+
+                        finalize_paid_order(order)
+
                         logger.info("Webhook processed successfully for reference: %s", reference)
                 except InsufficientStockError as e:
                     logger.warning("Webhook: insufficient stock for order %s: %s", order.id, e)
@@ -426,10 +430,7 @@ def payment_callback(request):
                     order.payment_status = 'paid'
                     order.payment_verified_at = timezone.now()
                     order.save()
-                    reduce_stock_for_order(order)
-                    order.save()
-                    if order.user:
-                        award_points_for_order(order)
+                    finalize_paid_order(order)
             except InsufficientStockError as e:
                 logger.warning("Payment callback: insufficient stock for order %s: %s", order.id, e)
                 frontend_url = get_frontend_url_from_business(payment.order.restaurant_settings, request=request)
@@ -464,14 +465,29 @@ def payment_callback(request):
             
     except Exception as e:
         logger.error(f"Payment callback error: {str(e)}", exc_info=True)
-        # Even on error, try to redirect to frontend with error status
         reference = request.GET.get('reference', '')
         if reference:
             try:
-                # Try to get frontend URL from payment/order if available
                 try:
                     payment = Payment.objects.get(reference=reference)
-                    frontend_url = get_frontend_url_from_business(payment.order.restaurant_settings, request=request)
+                    order = payment.order
+                    if payment.status == 'success' and order.payment_status == 'paid':
+                        frontend_url = get_frontend_url_from_business(
+                            order.restaurant_settings,
+                            request=request,
+                        )
+                        redirect_url = (
+                            f"{frontend_url.rstrip('/')}/payment/success?reference={reference}"
+                        )
+                        logger.warning(
+                            'Payment callback error after success for %s; redirecting to success UI',
+                            reference,
+                        )
+                        return HttpResponseRedirect(redirect_url)
+                    frontend_url = get_frontend_url_from_business(
+                        payment.order.restaurant_settings,
+                        request=request,
+                    )
                 except (Payment.DoesNotExist, AttributeError):
                     # If payment doesn't exist, we can't identify business - log and return error
                     logger.error(f"Cannot redirect: Payment {reference} not found, cannot identify business")

@@ -9,7 +9,6 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth import login, logout
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
 from django.conf import settings
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
@@ -42,6 +41,13 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+
+        try:
+            restaurant_settings = get_business_from_request(request)
+            from utils.tasks import enqueue_after_commit, send_welcome_task
+            enqueue_after_commit(send_welcome_task, user.id, restaurant_settings.id)
+        except (ValueError, RestaurantSettings.DoesNotExist) as exc:
+            logger.warning('Welcome email skipped: %s', exc)
         
         # Generate tokens
         refresh = RefreshToken.for_user(user)
@@ -132,22 +138,25 @@ class PasswordResetView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
         
         email = serializer.validated_data['email']
-        user = User.objects.get(email=email)
-        
-        # Generate reset token
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'message': 'Password reset email sent.'})
+
+        restaurant_settings = get_business_from_request(request)
+        frontend_url = get_frontend_url_from_business(restaurant_settings, request=request)
         token = default_token_generator.make_token(user)
         uid = urlsafe_base64_encode(force_bytes(user.pk))
-        
-        # Send reset email
-        reset_url = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}/"
-        send_mail(
-            'Password Reset Request',
-            f'Click the following link to reset your password: {reset_url}',
-            settings.DEFAULT_FROM_EMAIL,
-            [email],
-            fail_silently=False,
+        reset_url = f"{frontend_url.rstrip('/')}/reset-password/{uid}/{token}/"
+
+        from utils.tasks import enqueue_after_commit, send_password_reset_task
+        enqueue_after_commit(
+            send_password_reset_task,
+            user.id,
+            restaurant_settings.id,
+            reset_url,
         )
-        
+
         return Response({'message': 'Password reset email sent.'})
 
 
@@ -201,8 +210,8 @@ class SocialLoginView(generics.GenericAPIView):
                 
                 provider_user_id = google_user_info['provider_user_id']
                 email = google_user_info['email']
-                first_name = google_user_info['first_name']
-                last_name = google_user_info['last_name']
+                first_name = google_user_info.get('first_name', '')
+                last_name = google_user_info.get('last_name', '')
                 avatar_url = google_user_info.get('avatar_url', '')
                 
                 # Check if email is verified
@@ -286,6 +295,10 @@ class SocialLoginView(generics.GenericAPIView):
                         provider_user_id=provider_user_id,
                         access_token=access_token,
                     )
+
+            if provider == 'google':
+                from accounts.oauth_profile import apply_google_profile_to_user
+                apply_google_profile_to_user(user, google_user_info)
             
             # Generate tokens
             refresh = RefreshToken.for_user(user)
@@ -442,8 +455,8 @@ def google_oauth_callback(request):
         
         provider_user_id = google_user_info['provider_user_id']
         email = google_user_info['email']
-        first_name = google_user_info['first_name']
-        last_name = google_user_info['last_name']
+        first_name = google_user_info.get('first_name', '')
+        last_name = google_user_info.get('last_name', '')
         avatar_url = google_user_info.get('avatar_url', '')
         
         # Check if email is verified
@@ -517,6 +530,9 @@ def google_oauth_callback(request):
                     provider_user_id=provider_user_id,
                     access_token=access_token,
                 )
+
+        from accounts.oauth_profile import apply_google_profile_to_user
+        apply_google_profile_to_user(user, google_user_info)
         
         # Generate tokens
         refresh = RefreshToken.for_user(user)

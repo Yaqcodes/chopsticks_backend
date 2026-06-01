@@ -1,0 +1,31 @@
+{% extends "emails/base.html" %}
+{% block title %}Order Confirmation - {{ order_number }}{% endblock %}
+{% block content %}
+<p>Hi {{ greeting_name }},</p>
+<p>Thank you for your order. We have received your payment and your order is being processed.</p>
+<p><strong>Order number:</strong> {{ order_number }}</p>
+<p><strong>Delivery:</strong> {{ delivery_type }}</p>
+{% if delivery_address and delivery_type == "Delivery" %}
+<p><strong>Address:</strong> {{ delivery_address }}</p>
+{% endif %}
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:16px 0;border-collapse:collapse;">
+  <tr style="background-color:#f3f4f6;">
+    <th align="left" style="padding:8px;font-size:13px;">Item</th>
+    <th align="right" style="padding:8px;font-size:13px;">Qty</th>
+    <th align="right" style="padding:8px;font-size:13px;">Total</th>
+  </tr>
+  {% for item in items %}
+  <tr>
+    <td style="padding:8px;border-bottom:1px solid #e5e7eb;">{{ item.menu_item.name }}</td>
+    <td align="right" style="padding:8px;border-bottom:1px solid #e5e7eb;">{{ item.quantity }}</td>
+    <td align="right" style="padding:8px;border-bottom:1px solid #e5e7eb;">₦{{ item.total_price }}</td>
+  </tr>
+  {% endfor %}
+</table>
+<p style="font-size:17px;font-weight:bold;">Total: ₦{{ total_amount }}</p>
+{% if order_url %}
+<p><a href="{{ order_url }}" style="display:inline-block;margin-top:16px;padding:12px 24px;background-color:#111111;color:#ffffff;text-decoration:none;border-radius:4px;">View your order</a></p>
+{% elif frontend_url %}
+<p><a href="{{ frontend_url }}/orders" style="display:inline-block;margin-top:16px;padding:12px 24px;background-color:#111111;color:#ffffff;text-decoration:none;border-radius:4px;">View your order</a></p>
+{% endif %}
+{% endblock %}
