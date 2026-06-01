@@ -76,10 +76,12 @@ def send_order_confirmation_task(order_id):
 
     try:
         with transaction.atomic():
+            # Do not combine select_for_update with prefetch_related on Postgres
+            # (FOR UPDATE cannot be applied to the nullable side of an outer join).
             order = Order.objects.select_for_update().select_related(
                 'restaurant_settings',
                 'user',
-            ).prefetch_related('items__menu_item').get(pk=order_id)
+            ).get(pk=order_id)
 
             if order.confirmation_email_sent_at:
                 return 'already_sent'
