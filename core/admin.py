@@ -374,15 +374,33 @@ class RoschiBusinessSettingsAdmin(BusinessAdminMixin, ModelAdmin):
     def get_queryset(self, request):
         """Show only this business's settings."""
         qs = super().get_queryset(request)
-        business_settings = self._get_business_settings()
+        business_settings = self._get_business_settings(request)
         if business_settings:
             return qs.filter(id=business_settings.id)
         return qs.none()
+
+    def get_object(self, request, object_id, from_field=None):
+        """Only allow editing the tenant row for this admin site."""
+        obj = super().get_object(request, object_id, from_field)
+        business_settings = self._get_business_settings(request)
+        if business_settings and obj.pk != business_settings.pk:
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied('You cannot edit another business’s settings from this admin.')
+        return obj
+
+    def save_model(self, request, obj, form, change):
+        business_settings = self._get_business_settings(request)
+        if business_settings and obj.pk != business_settings.pk:
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied('You cannot save another business’s settings from this admin.')
+        super().save_model(request, obj, form, change)
+        if hasattr(self.admin_site, 'clear_business_settings_cache'):
+            self.admin_site.clear_business_settings_cache(request)
     
-    def _get_business_settings(self):
+    def _get_business_settings(self, request=None):
         """Get business settings from the current admin site."""
         if hasattr(self.admin_site, 'get_business_settings'):
-            return self.admin_site.get_business_settings()
+            return self.admin_site.get_business_settings(request)
         return None
     
     def has_add_permission(self, request):
@@ -605,7 +623,7 @@ class QuoteAdmin(ModelAdmin):
     def get_queryset(self, request):
         """Filter quotes by business for Roschi Water."""
         qs = super().get_queryset(request)
-        business_settings = roschi_admin_site.get_business_settings()
+        business_settings = self.admin_site.get_business_settings(request)
         if business_settings:
             return qs.filter(restaurant_settings=business_settings)
         # Return all quotes if no business settings (model should still be visible)

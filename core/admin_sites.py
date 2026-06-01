@@ -15,6 +15,8 @@ from django.urls import reverse
 from unfold.sites import UnfoldAdminSite
 from .models import RestaurantSettings
 
+_BUSINESS_SETTINGS_UNSET = object()
+
 
 class BusinessAdminSite(UnfoldAdminSite):
     """
@@ -45,38 +47,56 @@ class BusinessAdminSite(UnfoldAdminSite):
         self.index_title = index_title
         self._original_unfold = getattr(settings, 'UNFOLD', {})
     
-    def get_business_settings(self):
-        """
-        Get business settings for this admin site.
-        
-        Uses flexible matching:
-        1. Try domain containing business identifier
-        2. Try name containing business identifier (case-insensitive)
-        3. Returns None if no match found
-        """
-        if getattr(self, '_business_settings_resolved', False):
-            return self._business_settings_cache
+    def clear_business_settings_cache(self, request=None):
+        """Drop per-request tenant cache (e.g. after saving business settings)."""
+        if request is not None:
+            for attr in ('_business_admin_settings', '_business_admin_settings_resolved'):
+                if hasattr(request, attr):
+                    delattr(request, attr)
 
-        # Try domain match (flexible - handles various domain formats)
-        business_settings = RestaurantSettings.objects.filter(
-            domain__icontains=self.business_identifier
-        ).first()
+    def _business_settings_queryset(self, request=None):
+        """Candidates for this admin site; staff are limited to linked businesses."""
+        qs = RestaurantSettings.objects.all()
+        if request and request.user.is_authenticated and not request.user.is_superuser:
+            qs = qs.filter(id__in=request.user.businesses.values_list('id', flat=True))
+        return qs
+
+    def get_business_settings(self, request=None):
+        """
+        Resolve RestaurantSettings for this admin site.
+
+        Uses flexible matching on domain/name containing business_identifier.
+        Staff users only see tenants they are linked to. Cached on the request only
+        (not on the admin site singleton) so saves are visible on the next page load.
+        """
+        if request is not None and getattr(request, '_business_admin_settings_resolved', False):
+            cached = getattr(request, '_business_admin_settings', _BUSINESS_SETTINGS_UNSET)
+            if cached is not _BUSINESS_SETTINGS_UNSET:
+                return cached if cached is not None else None
+
+        qs = self._business_settings_queryset(request)
+        identifier = self.business_identifier
+
+        business_settings = (
+            qs.filter(domain__icontains=identifier).order_by('pk').first()
+        )
         if not business_settings:
-            # Fallback: try to get by name (case-insensitive)
-            business_settings = RestaurantSettings.objects.filter(
-                name__icontains=self.business_identifier.capitalize()
-            ).first()
+            business_settings = (
+                qs.filter(name__icontains=identifier.capitalize()).order_by('pk').first()
+            )
 
-        self._business_settings_resolved = True
-        self._business_settings_cache = business_settings
+        if request is not None:
+            request._business_admin_settings_resolved = True
+            request._business_admin_settings = business_settings
+
         return business_settings
     
-    def get_roschi_settings(self):
+    def get_roschi_settings(self, request=None):
         """
         Legacy method name for backward compatibility.
         Redirects to get_business_settings().
         """
-        return self.get_business_settings()
+        return self.get_business_settings(request)
     
     def has_permission(self, request):
         """
@@ -99,7 +119,7 @@ class BusinessAdminSite(UnfoldAdminSite):
             return False
         
         # Get business settings for this admin site
-        business_settings = self.get_business_settings()
+        business_settings = self.get_business_settings(request)
         if not business_settings:
             # If business not found, only superusers can access
             return False
@@ -179,6 +199,8 @@ class BusinessAdminSite(UnfoldAdminSite):
     
     def each_context(self, request):
         """Override context to inject business-specific Unfold settings."""
+        self.clear_business_settings_cache(request)
+
         # Get business-specific Unfold settings from settings
         business_unfold_key = f'{self.business_identifier.upper()}_UNFOLD'
         business_unfold = getattr(settings, business_unfold_key, {})
