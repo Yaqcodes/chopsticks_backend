@@ -46,13 +46,17 @@ def finalize_paid_order(order, *, award_loyalty=True):
     """
     Post-payment side effects: stock reduction, loyalty points, confirmation email.
     Call inside an existing atomic() block after order.payment_status is set to 'paid'.
+    Safe to call when payment is already finalized (idempotent).
     """
     from loyalty.services import award_points_for_order
-    from utils.tasks import enqueue_after_commit, schedule_points_earned_email
-    from utils.tasks import send_order_confirmation_task
+    from utils.tasks import schedule_order_confirmation_email, schedule_points_earned_email
 
-    reduce_stock_for_order(order)
-    order.save(update_fields=['stock_reduced'])
+    if order.payment_status != 'paid':
+        return
+
+    if not order.stock_reduced:
+        reduce_stock_for_order(order)
+        order.save(update_fields=['stock_reduced'])
 
     if award_loyalty and order.user:
         points = award_points_for_order(order)
@@ -64,7 +68,8 @@ def finalize_paid_order(order, *, award_loyalty=True):
                 f'Order {order.order_number}',
             )
 
-    enqueue_after_commit(send_order_confirmation_task, order.id)
+    if not order.confirmation_email_sent_at:
+        schedule_order_confirmation_email(order.id)
 
 
 def set_order_status(order, new_status, *, notify=True):

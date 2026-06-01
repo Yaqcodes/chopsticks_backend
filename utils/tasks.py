@@ -2,7 +2,7 @@ import logging
 from functools import partial
 
 from celery import shared_task
-from django.db import transaction
+from django.db import OperationalError, transaction
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +50,31 @@ def schedule_order_status_update_emails(pending):
     transaction.on_commit(_dispatch_all)
 
 
+def schedule_order_confirmation_email(order_id):
+    """
+    Enqueue confirmation email after commit.
+
+    Idempotency (production): (1) skip if confirmation_email_sent_at set before
+    enqueue, (2) stable Celery task_id collapses duplicate queue entries from
+    callback + verify, (3) task row lock + confirmation_email_sent_at in worker.
+    """
+    task_id = f'order-confirmation-{order_id}'
+
+    def _dispatch():
+        try:
+            send_order_confirmation_task.apply_async(
+                args=[order_id],
+                task_id=task_id,
+            )
+        except Exception:
+            logger.exception(
+                'Failed to enqueue confirmation email for order %s',
+                order_id,
+            )
+
+    transaction.on_commit(_dispatch)
+
+
 def schedule_points_earned_email(user, restaurant_settings, points, reason):
     """Enqueue points-earned email when the user has an email address."""
     from django.conf import settings
@@ -67,7 +92,13 @@ def schedule_points_earned_email(user, restaurant_settings, points, reason):
     )
 
 
-@shared_task(name='utils.send_order_confirmation_task', queue='email')
+@shared_task(
+    name='utils.send_order_confirmation_task',
+    queue='email',
+    autoretry_for=(OperationalError,),
+    retry_backoff=True,
+    retry_kwargs={'max_retries': 3},
+)
 def send_order_confirmation_task(order_id):
     from django.utils import timezone
 
@@ -102,6 +133,8 @@ def send_order_confirmation_task(order_id):
     except Order.DoesNotExist:
         logger.error('send_order_confirmation_task: order %s not found', order_id)
         return 'not_found'
+    except OperationalError:
+        raise
     except Exception as exc:
         logger.exception('send_order_confirmation_task failed for order %s: %s', order_id, exc)
         return 'error'

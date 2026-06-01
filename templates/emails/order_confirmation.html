@@ -5,7 +5,7 @@
 <p>Thank you for your order. We have received your payment and your order is being processed.</p>
 <p><strong>Order number:</strong> {{ order_number }}</p>
 <p><strong>Delivery:</strong> {{ delivery_type }}</p>
-{% if delivery_address and delivery_type == "Delivery" %}
+{% if delivery_address and delivery_type|lower == "delivery" %}
 <p><strong>Address:</strong> {{ delivery_address }}</p>
 {% endif %}
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:16px 0;border-collapse:collapse;">

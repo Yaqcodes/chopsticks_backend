@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 def normalize_oauth_names(first_name='', last_name='', full_name=''):
     """
     Normalize given/family names from Google (or similar).
-    Uses full ``name`` when given_name is missing.
+    Uses full ``name`` when given_name is missing. Never uses email.
     """
     first_name = (first_name or '').strip()
     last_name = (last_name or '').strip()
@@ -25,23 +25,25 @@ def normalize_oauth_names(first_name='', last_name='', full_name=''):
 
 def sync_user_profile_from_oauth(user, *, first_name='', last_name=''):
     """
-    Persist OAuth names on the user when local fields are empty.
-    Does not overwrite names the user already set.
+    Persist OAuth names on each sign-in when the provider supplies them.
+
+    Updates first/last name from Google on login (does not clear fields when
+    Google omits a name). Does not use email for names.
     """
     first_name, last_name = normalize_oauth_names(first_name, last_name)
 
     update_fields = []
-    if first_name and not (user.first_name or '').strip():
+    if first_name and user.first_name != first_name:
         user.first_name = first_name
         update_fields.append('first_name')
-    if last_name and not (user.last_name or '').strip():
+    if last_name and user.last_name != last_name:
         user.last_name = last_name
         update_fields.append('last_name')
 
     if update_fields:
         user.save(update_fields=update_fields)
         logger.info(
-            'Updated OAuth profile fields for user %s: %s',
+            'Synced OAuth profile fields for user %s: %s',
             user.pk,
             ', '.join(update_fields),
         )

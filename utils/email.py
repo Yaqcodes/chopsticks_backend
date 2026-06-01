@@ -7,7 +7,7 @@ from django.utils.html import strip_tags
 
 from core.media_urls import absolute_media_url
 from core.utils import get_frontend_url_from_business, get_order_frontend_url
-from utils.names import get_order_customer_first_name, get_user_first_name
+from utils.names import greeting_name_for_order, greeting_name_for_user
 from utils.tenant_branding import get_tenant_display_name
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ def _build_from_email(restaurant_settings):
 
 
 def _greeting_name_for_user(user):
-    return get_user_first_name(user) or 'there'
+    return greeting_name_for_user(user)
 
 
 def _base_email_context(restaurant_settings, request=None, *, greeting_name=None):
@@ -100,7 +100,7 @@ def send_templated_email(
 
 def send_order_confirmation_email(order, request=None):
     subject = f'Order Confirmation - {order.order_number}'
-    greeting = get_order_customer_first_name(order) or 'there'
+    greeting = greeting_name_for_order(order)
     context = {
         'order': order,
         'order_number': order.order_number,
@@ -123,7 +123,7 @@ def send_order_confirmation_email(order, request=None):
 def send_order_status_update_email(order, new_status, request=None):
     status_display = dict(order.STATUS_CHOICES).get(new_status, new_status)
     subject = f'Order Update - {order.order_number}'
-    greeting = get_order_customer_first_name(order) or 'there'
+    greeting = greeting_name_for_order(order)
     context = {
         'order': order,
         'order_number': order.order_number,

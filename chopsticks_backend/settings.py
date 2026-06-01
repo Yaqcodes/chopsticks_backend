@@ -167,6 +167,8 @@ else:
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
+            # Allow Celery workers and runserver to share SQLite in local dev.
+            'OPTIONS': {'timeout': 30},
         }
     }
 

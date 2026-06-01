@@ -194,18 +194,25 @@ def verify_payment(request, reference):
                 payment.verified_at = timezone.now()
                 
                 if result.get('status') == 'success':
+                    already_finalized = (
+                        payment.status == 'success'
+                        and order.payment_status == 'paid'
+                    )
                     payment.status = 'success'
-                    
-                    # Update order status atomically
                     order.payment_status = 'paid'
                     order.payment_verified_at = timezone.now()
                     order.save()
 
-                    try:
-                        finalize_paid_order(order)
-                    except InsufficientStockError as e:
-                        logger.warning("Payment verify: insufficient stock for order %s: %s", order.id, e)
-                        raise
+                    if not already_finalized:
+                        try:
+                            finalize_paid_order(order)
+                        except InsufficientStockError as e:
+                            logger.warning(
+                                "Payment verify: insufficient stock for order %s: %s",
+                                order.id,
+                                e,
+                            )
+                            raise
 
                 else:
                     payment.status = 'failed'
