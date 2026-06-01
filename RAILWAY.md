@@ -10,17 +10,16 @@ Single Django service serving all tenants (Chopsticks & Bowls, Roschi Water, Zma
 
 In the Railway project, create these resources:
 
-1. **Django service** (web) — this repo, branch `railway`. Procfile + `runtime.txt` are detected by Nixpacks automatically.
-2. **PostgreSQL** plugin.
-3. **Bucket** (Storage Bucket, S3-compatible).
-4. **Redis** — **+ New → Database → Redis** (Celery broker).
-5. **Worker service** (optional second deploy from the same repo) — see [Transactional email](#10-transactional-email-brevo--celery).
+1. **Django (web) service** — this repo. Uses root [`railway.toml`](./railway.toml) (migrate + `/healthz/` healthcheck).
+2. **Celery worker service** — same repo, same branch. Uses [`railway.worker.toml`](./railway.worker.toml) (**no HTTP healthcheck**).
+3. **PostgreSQL** plugin.
+4. **Redis** — Celery broker (`REDIS_URL`).
+5. **Bucket** (Storage Bucket, S3-compatible).
 
-Then **link** the database, bucket, and Redis to the Django service:
+Then **link** the database and bucket to the Django service:
 
 - Postgres -> Connect: injects private `DATABASE_URL` (`${{Postgres.DATABASE_URL}}`) and public `DATABASE_PUBLIC_URL` (`${{Postgres.DATABASE_PUBLIC_URL}}`). **Do not run `migrate` during image build** — private DNS (`postgres.railway.internal`) is unavailable there.
 - Bucket -> Connect: choose the Django service. Railway injects `BUCKET`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `ENDPOINT`, `REGION`. Settings auto-detect them and switch the storage backend.
-- Redis -> Connect: injects `REDIS_URL` (used by Celery). Use **Shared Variables** so the worker service gets the same value.
 
 ---
 
@@ -39,10 +38,6 @@ Copy values from [`.env.railway.template`](./.env.railway.template) into the Dja
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | private host; used at **container start** |
 | `DATABASE_PUBLIC_URL` | `${{Postgres.DATABASE_PUBLIC_URL}}` | optional; for `manage.py migrate` from your laptop |
 | `BUCKET` / `ACCESS_KEY_ID` / `SECRET_ACCESS_KEY` / `ENDPOINT` / `REGION` | Bucket link | Railway-injected |
-| `REDIS_URL` | `${{Redis.REDIS_URL}}` | Celery broker (web + worker) |
-| `BREVO_API_KEY` | Brevo dashboard (v3 API key) | Transactional email |
-| `DEFAULT_FROM_EMAIL` | `noreply@ecommerce.thestringtheorylabs.com` | Must match verified Brevo sender |
-| `EMAIL_BACKEND` | `anymail.backends.brevo.EmailBackend` | When `BREVO_API_KEY` is set |
 
 When the Railway public URL is not yet known (first deploy), set `BASE_URL` to a placeholder, deploy, copy the assigned `*.up.railway.app` URL, then update `BASE_URL` and redeploy. After cutover to a custom domain (e.g. `https://api.zmall.ng`), only `BASE_URL` and `ALLOWED_HOSTS` need to change in Railway plus the OAuth/Paystack dashboards. No code change.
 
@@ -58,7 +53,37 @@ web:       gunicorn               # starts before healthcheck (do not migrate he
 
 Migrations must **not** run in the web start command: on a fresh database they can take over a minute, while the healthcheck timeout is 30s, so gunicorn never listens in time. `preDeployCommand` runs after build on the private network and finishes before the healthcheck.
 
-The healthcheck path is `/healthz/` (configured in `railway.toml`).
+**Healthcheck is not in `railway.toml`** — both services auto-detect that file, so an HTTP healthcheck in the TOML would break the Celery worker. Configure healthcheck **per service in the Railway dashboard** instead.
+
+### Celery worker (second service, same repo)
+
+Railway usually **auto-detects one `railway.toml`** for every service from the repo (no separate config file picker in the UI). Both services therefore share the same file; only **dashboard** settings differ.
+
+| | Web (Django) | Worker (Celery) |
+|---|---|---|
+| Config file | `railway.toml` (auto-detected) | Same `railway.toml` (auto-detected) |
+| **Custom start command** | Default / Procfile `web` (gunicorn) | `celery -A chopsticks_backend worker -l info --concurrency=2 -Q email` |
+| **Healthcheck** (Deploy settings) | Path `/healthz/`, timeout **30s** | **Empty / disabled** — worker has no HTTP |
+| preDeploy migrate | Runs from `railway.toml` on both deploys | Same (harmless; idempotent) |
+
+**Worker setup in Railway dashboard:**
+
+1. Add a second service from the same GitHub repo (or duplicate the web service).
+2. **Deploy → Custom Start Command:**  
+   `celery -A chopsticks_backend worker -l info --concurrency=2 -Q email`
+3. **Deploy → Healthcheck:** leave path **blank** (do not use `/healthz/`).
+4. **Variables:** Shared Variables with web (`REDIS_URL`, `DATABASE_URL`, `BREVO_API_KEY`, etc.).
+5. No public domain on the worker.
+
+**Web service (Django):**
+
+1. **Deploy → Healthcheck path:** `/healthz/`  
+2. **Deploy → Healthcheck timeout:** `30`  
+3. Start command: leave default (Procfile `web` / gunicorn).
+
+If deploy logs show Celery **ready** then `Healthcheck failed!` on `/healthz/`, the worker still has a healthcheck enabled in the dashboard or an old `railway.toml` on the branch with `healthcheckPath` set — remove it from the file and clear the worker healthcheck, then redeploy.
+
+Optional: [`railway.worker.toml`](./railway.worker.toml) exists for teams whose Railway plan exposes a **custom config file path** per service; most projects use the shared `railway.toml` + dashboard approach above.
 
 ### `could not translate host name "postgres.railway.internal"`
 
@@ -137,52 +162,5 @@ When `api.<brand>.ng` is ready:
 - [ ] Google OAuth round-trips through `BASE_URL`.
 - [ ] Paystack init/callback round-trips on a test transaction.
 - [ ] `DEBUG=False` is enforced; security headers (HSTS, content-type-nosniff) appear in the response.
-- [ ] `python manage.py sendtestemail you@example.com` delivers via Brevo (after DNS + API key configured).
-- [ ] Test Paystack payment sends **one** order confirmation email (`confirmation_email_sent_at` set on order).
-- [ ] Admin order status change (bulk or single edit) sends status update email.
-- [ ] Password reset from a tenant frontend uses that tenant's domain in the reset link.
-- [ ] Celery worker service logs show tasks consumed from the `email` queue.
-
----
-
-## 10. Transactional email (Brevo + Celery)
-
-Outbound mail uses **Brevo** (django-anymail) and **Celery** so Paystack webhooks are not blocked by SMTP latency.
-
-### Brevo + Cloudflare DNS
-
-1. In [Brevo](https://www.brevo.com): **SMTP & API → API Keys** → create a **v3** key (not SMTP key).
-2. **Senders & Domains** → add **`ecommerce.thestringtheorylabs.com`**.
-3. In **Cloudflare** DNS for `thestringtheorylabs.com`, add the DKIM/SPF records Brevo provides (subdomain `ecommerce` keeps root MX safe if you use Google Workspace on the apex).
-4. Authenticate the domain in Brevo; confirm sender **`noreply@ecommerce.thestringtheorylabs.com`**.
-
-### Redis + worker on Railway
-
-`railway.toml` only configures the **web** service (migrate, healthcheck). Redis and the worker are provisioned in the dashboard:
-
-1. Add **Redis** and link it to the Django service (`REDIS_URL`).
-2. Create a **second service** from the same GitHub repo/branch:
-   - Name: e.g. `chopsticks-worker`
-   - **Start command:** `celery -A chopsticks_backend worker -l info --concurrency=2 -Q email`
-   - Same **Shared Variables** as web (`SECRET_KEY`, `DATABASE_URL`, `BREVO_API_KEY`, `REDIS_URL`, bucket vars, etc.)
-   - Disable HTTP healthcheck (worker has no HTTP port)
-3. The web service continues to use Procfile `web:`; the worker uses the command above (also defined as `worker:` in the Procfile for reference).
-
-### Local development
-
-Copy from [`.env.railway.template`](./.env.railway.template):
-
-```bash
-BREVO_API_KEY=xkeysib-...
-DEFAULT_FROM_EMAIL=noreply@ecommerce.thestringtheorylabs.com
-EMAIL_BACKEND=anymail.backends.brevo.EmailBackend
-REDIS_URL=redis://localhost:6379/0   # optional; omit for sync tasks in DEBUG
-```
-
-Without `REDIS_URL` and with `DEBUG=True`, `CELERY_TASK_ALWAYS_EAGER` runs email tasks synchronously (no separate worker process).
-
-Run worker locally (optional):
-
-```bash
-celery -A chopsticks_backend worker -l info -Q email
-```
+- [ ] Celery worker deploy is **Successful** (config: `railway.worker.toml`, no `/healthz/` healthcheck).
+- [ ] Worker logs show `celery@... ready` and queue `email`.

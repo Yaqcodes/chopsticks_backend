@@ -1,0 +1,15 @@
+# OPTIONAL — only if your Railway project lets you set a custom config file path
+# per service (many UIs only auto-detect railway.toml for all services).
+#
+# Default approach: shared railway.toml (no healthcheckPath) + dashboard:
+#   Web:    healthcheck /healthz/
+#   Worker: custom start = celery ... ; healthcheck empty
+
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "celery -A chopsticks_backend worker -l info --concurrency=2 -Q email"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+# No healthcheckPath — worker has no HTTP server.

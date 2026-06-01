@@ -1,12 +1,16 @@
+# Django web service — use this file on the API service (default path: railway.toml).
+# Celery worker must use railway.worker.toml (see RAILWAY.md).
+
 [build]
 # Nixpacks auto-detects requirements.txt + runtime.txt + Procfile.
 builder = "NIXPACKS"
 
 [deploy]
-# Migrations run here (private network) before the web container and healthcheck start.
+# Migrations run here (private network) before the web container starts.
 # Do not run migrate in the web/start command — fresh DB migrations can exceed the healthcheck window.
 preDeployCommand = "python manage.py migrate --noinput"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
-healthcheckPath = "/healthz/"
-healthcheckTimeout = 30
+# Healthcheck is NOT set here — both web and worker read this file. Configure per service in Railway:
+#   Django (web): Deploy → Healthcheck path = /healthz/ , timeout 30s
+#   Celery worker: Deploy → no healthcheck; custom start = celery -A chopsticks_backend worker -l info --concurrency=2 -Q email
