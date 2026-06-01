@@ -10,6 +10,9 @@ from .services import validate_order_items
 
 logger = logging.getLogger(__name__)
 
+# Zmall (and other tenants) charge up to ₦6,000+ for some delivery zones.
+MAX_CHECKOUT_DELIVERY_FEE = Decimal('50000.00')
+
 def get_minimum_order_amount(request=None):
     """
     Get minimum order amount from RestaurantSettings based on request domain.
@@ -430,8 +433,10 @@ class UnifiedOrderSerializer(serializers.ModelSerializer):
                 'total_amount': frontend_total,
             })
         else:
-            # Fall back to backend calculation for safety
-            validated_data = self._calculate_backend_totals(validated_data, items_data, restaurant_settings)
+            # Fall back to backend calculation for safety (merge — do not replace validated_data)
+            validated_data.update(
+                self._calculate_backend_totals(validated_data, items_data, restaurant_settings)
+            )
             
             # Re-validate minimum order amount after backend calculation
             if validated_data['total_amount'] < minimum_order:
@@ -536,8 +541,8 @@ class UnifiedOrderSerializer(serializers.ModelSerializer):
                 if not (Decimal('0') <= tax_rate <= Decimal('0.25')):
                     return False
             
-            # Check delivery fee is reasonable (0 to 5000 Naira)
-            if delivery_fee < 0 or delivery_fee > 5000:
+            # Check delivery fee is reasonable (must match frontend city fee table)
+            if delivery_fee < 0 or delivery_fee > MAX_CHECKOUT_DELIVERY_FEE:
                 return False
             
             # Check discount is reasonable (0 to subtotal + tax + delivery_fee)
@@ -768,8 +773,9 @@ class GuestOrderSerializer(serializers.ModelSerializer):
                 'total_amount': frontend_total,
             })
         else:
-            # Fall back to backend calculation for safety
-            validated_data = self._calculate_backend_totals(validated_data, items_data, restaurant_settings)
+            validated_data.update(
+                self._calculate_backend_totals(validated_data, items_data, restaurant_settings)
+            )
             
             # Re-validate minimum order amount after backend calculation
             if validated_data['total_amount'] < minimum_order:
@@ -831,8 +837,8 @@ class GuestOrderSerializer(serializers.ModelSerializer):
                 if not (Decimal('0') <= tax_rate <= Decimal('0.25')):
                     return False
             
-            # Check delivery fee is reasonable (0 to 5000 Naira)
-            if delivery_fee < 0 or delivery_fee > 5000:
+            # Check delivery fee is reasonable (must match frontend city fee table)
+            if delivery_fee < 0 or delivery_fee > MAX_CHECKOUT_DELIVERY_FEE:
                 return False
             
             # Check discount is reasonable (0 to subtotal + tax + delivery_fee)
@@ -1120,8 +1126,9 @@ class OrderSerializer(serializers.ModelSerializer):
                 'total_amount': frontend_total,
             })
         else:
-            # Fall back to backend calculation for safety
-            validated_data = self._calculate_backend_totals(validated_data, items_data, restaurant_settings)
+            validated_data.update(
+                self._calculate_backend_totals(validated_data, items_data, restaurant_settings)
+            )
             
             # Re-validate minimum order amount after backend calculation
             if validated_data['total_amount'] < minimum_order:
@@ -1227,8 +1234,8 @@ class OrderSerializer(serializers.ModelSerializer):
                 if not (Decimal('0') <= tax_rate <= Decimal('0.25')):
                     return False
             
-            # Check delivery fee is reasonable (0 to 5000 Naira)
-            if delivery_fee < 0 or delivery_fee > 5000:
+            # Check delivery fee is reasonable (must match frontend city fee table)
+            if delivery_fee < 0 or delivery_fee > MAX_CHECKOUT_DELIVERY_FEE:
                 return False
             
             # Check discount is reasonable (0 to subtotal + tax + delivery_fee)

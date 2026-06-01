@@ -54,18 +54,20 @@ def schedule_order_confirmation_email(order_id):
     """
     Enqueue confirmation email after commit.
 
-    Idempotency (production): (1) skip if confirmation_email_sent_at set before
-    enqueue, (2) stable Celery task_id collapses duplicate queue entries from
-    callback + verify, (3) task row lock + confirmation_email_sent_at in worker.
+    Idempotency: skip if already sent; the worker uses select_for_update +
+    confirmation_email_sent_at so duplicate tasks from callback + verify are safe.
+
+    Do not pass a fixed Celery task_id — a failed send still reserves that id and
+    blocks retries on later payment webhooks.
     """
-    task_id = f'order-confirmation-{order_id}'
+    from orders.models import Order
+
+    if Order.objects.filter(pk=order_id, confirmation_email_sent_at__isnull=False).exists():
+        return
 
     def _dispatch():
         try:
-            send_order_confirmation_task.apply_async(
-                args=[order_id],
-                task_id=task_id,
-            )
+            send_order_confirmation_task.delay(order_id)
         except Exception:
             logger.exception(
                 'Failed to enqueue confirmation email for order %s',
@@ -123,6 +125,14 @@ def send_order_confirmation_task(order_id):
             if not recipient:
                 logger.warning('Order %s has no customer email', order_id)
                 return 'no_recipient'
+
+            item_count = order.items.count()
+            if item_count == 0:
+                logger.error(
+                    'Order %s has no line items; skipping confirmation email (will retry)',
+                    order_id,
+                )
+                return 'no_items'
 
             if not send_order_confirmation_email(order):
                 return 'send_failed'

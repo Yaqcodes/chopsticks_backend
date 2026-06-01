@@ -65,7 +65,8 @@ class BusinessAdminMixin:
 
 
 def _order_item_inline_all_readonly():
-    return ('menu_item_display', 'quantity', 'unit_price', 'total_price', 'special_instructions')
+    # Read-only FK shows the product label without loading the full SKU <select>.
+    return ('menu_item', 'quantity', 'unit_price', 'total_price', 'special_instructions')
 
 
 def _menu_item_label(menu_item):
@@ -136,18 +137,21 @@ class OrderItemInline(admin.TabularInline):
     def get_fields(self, request, obj=None):
         if request.user.is_superuser:
             return list(self.fields)
-        return ['menu_item_display', 'quantity', 'unit_price', 'total_price', 'special_instructions']
+        return list(_order_item_inline_all_readonly())
 
     def get_readonly_fields(self, request, obj=None):
         if request.user.is_superuser:
             return list(self.readonly_fields)
         return list(_order_item_inline_all_readonly())
 
+    def has_view_permission(self, request, obj=None):
+        return True
+
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('menu_item')
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if db_field.name == 'menu_item':
+        if db_field.name == 'menu_item' and not request.user.is_superuser:
             kwargs['queryset'] = MenuItem.objects.none()
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
@@ -333,12 +337,15 @@ class RoschiOrderItemInline(TabularInline):
     def get_fields(self, request, obj=None):
         if request.user.is_superuser:
             return list(self.fields)
-        return ['menu_item_display', 'get_barcode', 'quantity', 'unit_price', 'total_price']
+        return ['menu_item', 'get_barcode', 'quantity', 'unit_price', 'total_price']
 
     def get_readonly_fields(self, request, obj=None):
         if request.user.is_superuser:
             return list(self.readonly_fields)
-        return ['menu_item_display', 'get_barcode', 'quantity', 'unit_price', 'total_price']
+        return ['menu_item', 'get_barcode', 'quantity', 'unit_price', 'total_price']
+
+    def has_view_permission(self, request, obj=None):
+        return True
 
     def has_add_permission(self, request, obj=None):
         return request.user.is_superuser
@@ -347,12 +354,14 @@ class RoschiOrderItemInline(TabularInline):
         return request.user.is_superuser
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if db_field.name == 'menu_item':
+        if db_field.name == 'menu_item' and request.user.is_superuser:
             business_settings = self._get_business_settings()
             if business_settings:
                 kwargs['queryset'] = _scoped_menu_item_queryset(business_settings=business_settings)
             else:
                 kwargs['queryset'] = MenuItem.objects.none()
+        elif db_field.name == 'menu_item':
+            kwargs['queryset'] = MenuItem.objects.none()
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
     
     def get_queryset(self, request):

@@ -98,17 +98,48 @@ def send_templated_email(
         return False
 
 
+def _order_line_items_for_email(order):
+    """Line items for confirmation templates (always query fresh; never cache on order)."""
+    rows = []
+    for item in order.items.select_related('menu_item').all():
+        name = 'Item'
+        if item.menu_item_id and item.menu_item:
+            name = item.menu_item.name
+        elif item.special_instructions:
+            name = item.special_instructions[:120]
+        rows.append(
+            {
+                'name': name,
+                'quantity': item.quantity,
+                'total_price': item.total_price,
+            }
+        )
+    return rows
+
+
 def send_order_confirmation_email(order, request=None):
     subject = f'Order Confirmation - {order.order_number}'
     greeting = greeting_name_for_order(order)
+    line_items = _order_line_items_for_email(order)
+    if not line_items:
+        logger.error(
+            'send_order_confirmation_email: order %s has no line items',
+            order.order_number,
+        )
+        return False
+
     context = {
         'order': order,
         'order_number': order.order_number,
         'order_url': get_order_frontend_url(order, request=request),
+        'subtotal': order.subtotal,
+        'tax_amount': order.tax_amount,
+        'delivery_fee': order.delivery_fee,
+        'discount_amount': order.discount_amount,
         'total_amount': order.total_amount,
         'delivery_address': order.delivery_address or 'No address provided',
         'delivery_type': order.get_delivery_type_display(),
-        'items': list(order.items.select_related('menu_item').all()),
+        'items': line_items,
     }
     return send_templated_email(
         restaurant_settings=order.restaurant_settings,

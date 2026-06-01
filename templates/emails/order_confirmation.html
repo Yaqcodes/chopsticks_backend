@@ -16,13 +16,20 @@
   </tr>
   {% for item in items %}
   <tr>
-    <td style="padding:8px;border-bottom:1px solid #e5e7eb;">{{ item.menu_item.name }}</td>
+    <td style="padding:8px;border-bottom:1px solid #e5e7eb;">{{ item.name }}</td>
     <td align="right" style="padding:8px;border-bottom:1px solid #e5e7eb;">{{ item.quantity }}</td>
     <td align="right" style="padding:8px;border-bottom:1px solid #e5e7eb;">₦{{ item.total_price }}</td>
   </tr>
   {% endfor %}
 </table>
-<p style="font-size:17px;font-weight:bold;">Total: ₦{{ total_amount }}</p>
+<p style="margin:8px 0 0;">Subtotal: ₦{{ subtotal }}</p>
+{% if delivery_fee and delivery_fee > 0 %}
+<p style="margin:4px 0 0;">Delivery: ₦{{ delivery_fee }}</p>
+{% endif %}
+{% if discount_amount and discount_amount > 0 %}
+<p style="margin:4px 0 0;">Discount: −₦{{ discount_amount }}</p>
+{% endif %}
+<p style="font-size:17px;font-weight:bold;margin-top:8px;">Total: ₦{{ total_amount }}</p>
 {% if order_url %}
 <p><a href="{{ order_url }}" style="display:inline-block;margin-top:16px;padding:12px 24px;background-color:#111111;color:#ffffff;text-decoration:none;border-radius:4px;">View your order</a></p>
 {% elif frontend_url %}
