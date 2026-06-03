@@ -28,6 +28,7 @@ from .serializers import (
 from .google_oauth import validate_google_oauth_token
 from core.utils import get_business_from_request, get_frontend_url_from_business
 from core.models import RestaurantSettings
+from .welcome_email import schedule_welcome_email_for_new_user
 
 
 class RegisterView(generics.CreateAPIView):
@@ -44,8 +45,7 @@ class RegisterView(generics.CreateAPIView):
 
         try:
             restaurant_settings = get_business_from_request(request)
-            from utils.tasks import enqueue_after_commit, send_welcome_task
-            enqueue_after_commit(send_welcome_task, user.id, restaurant_settings.id)
+            schedule_welcome_email_for_new_user(user, restaurant_settings)
         except (ValueError, RestaurantSettings.DoesNotExist) as exc:
             logger.warning('Welcome email skipped: %s', exc)
         
@@ -200,10 +200,9 @@ class SocialLoginView(generics.GenericAPIView):
         access_token = data['access_token']
         
         try:
+            restaurant_settings = get_business_from_request(request)
+
             if provider == 'google':
-                # Get business context for OAuth validation
-                from core.utils import get_business_from_request
-                restaurant_settings = get_business_from_request(request)
                 
                 # Validate Google OAuth token and get user info (business-scoped)
                 google_user_info = validate_google_oauth_token(access_token, restaurant_settings)
@@ -241,6 +240,7 @@ class SocialLoginView(generics.GenericAPIView):
                 social_account.save()
                 
             except SocialAccount.DoesNotExist:
+                is_new_user = False
                 # Check if user with this email already exists
                 try:
                     user = User.objects.get(email=email)
@@ -254,6 +254,7 @@ class SocialLoginView(generics.GenericAPIView):
                     )
                     
                 except User.DoesNotExist:
+                    is_new_user = True
                     # Create new user and social account
                     username = email.split('@')[0]  # Use email prefix as username
                     
@@ -295,6 +296,9 @@ class SocialLoginView(generics.GenericAPIView):
                         provider_user_id=provider_user_id,
                         access_token=access_token,
                     )
+
+                if is_new_user:
+                    schedule_welcome_email_for_new_user(user, restaurant_settings)
 
             if provider == 'google':
                 from accounts.oauth_profile import apply_google_profile_to_user
@@ -476,6 +480,7 @@ def google_oauth_callback(request):
             social_account.save()
             
         except SocialAccount.DoesNotExist:
+            is_new_user = False
             # Check if user with this email already exists
             try:
                 user = User.objects.get(email=email)
@@ -489,6 +494,7 @@ def google_oauth_callback(request):
                 )
                 
             except User.DoesNotExist:
+                is_new_user = True
                 # Create new user and social account
                 username = email.split('@')[0]  # Use email prefix as username
                 
@@ -530,6 +536,9 @@ def google_oauth_callback(request):
                     provider_user_id=provider_user_id,
                     access_token=access_token,
                 )
+
+            if is_new_user:
+                schedule_welcome_email_for_new_user(user, restaurant_settings)
 
         from accounts.oauth_profile import apply_google_profile_to_user
         apply_google_profile_to_user(user, google_user_info)
